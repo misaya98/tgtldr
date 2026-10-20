@@ -255,11 +255,11 @@ select {
 .table-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .form-grid.compact {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
 }
 
 .form-stack {
@@ -371,6 +371,22 @@ select {
     padding: 16px;
   }
 
+  .modal-card {
+    max-height: calc(100dvh - 60px - env(safe-area-inset-bottom));
+    padding: 14px;
+  }
+
+  .modal-head h2 {
+    font-size: 1.4rem;
+  }
+
+  .drawer-body {
+    padding: 8px 14px 24px;
+  }
+
+  .settings-tabs-track {
+    min-width: 420px;
+  }
 }
 
 .button {
@@ -1207,6 +1223,13 @@ select {
   isolation: isolate;
 }
 
+@media (max-width: 680px) {
+  .settings-tabs-track {
+    grid-template-columns: repeat(5, minmax(100px, 1fr));
+    min-width: 500px;
+  }
+}
+
 .settings-tab-indicator {
   position: absolute;
   z-index: 0;
@@ -1702,6 +1725,7 @@ select {
   padding-right: 4px;
   padding-bottom: 8px;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-actions {
@@ -1793,6 +1817,7 @@ select {
   padding: 8px 28px 28px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .drawer-actions {
@@ -1905,7 +1930,7 @@ select {
 .toolbar-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .data-table-wrap {
@@ -2159,6 +2184,9 @@ select {
 
 .table-editor-primary-grid {
   padding-top: 12px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .table-editor-note {
@@ -2843,6 +2871,11 @@ select {
     padding-bottom: calc(132px + env(safe-area-inset-bottom));
   }
 
+  .dashboard-main {
+    min-width: 0;
+    width: 100%;
+  }
+
   .dashboard-sidebar {
     position: fixed;
     z-index: 1100;
@@ -2970,7 +3003,7 @@ select {
   }
 
   .drawer-panel {
-    width: min(760px, calc(100vw - 24px));
+    width: min(90vw, calc(100vw - 24px));
   }
 
   .drawer-body {
@@ -3190,6 +3223,7 @@ select {
     overflow: visible;
     border: 0;
     background: transparent;
+    -webkit-overflow-scrolling: touch;
   }
 
   .data-table,
@@ -3206,8 +3240,8 @@ select {
   .data-row {
     display: grid;
     grid-template-columns: max-content max-content minmax(0, 1fr);
-    gap: 10px;
-    padding: 16px;
+    gap: 8px;
+    padding: 14px;
     border: 1px solid rgba(28, 25, 23, 0.08);
     border-radius: 20px;
     background: rgba(255, 255, 255, 0.72);
@@ -3247,6 +3281,10 @@ select {
   .table-editor,
   .history-backfill-panel {
     gap: 14px;
+  }
+
+  .table-editor-primary-grid {
+    grid-template-columns: 1fr;
   }
 
   .history-backfill-panel {
@@ -3289,7 +3327,7 @@ select {
     width: 100%;
     max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
     padding: 18px;
-    border-radius: 20px;
+    border-radius: 20px 20px 0 0;
   }
 
   .toast-viewport {

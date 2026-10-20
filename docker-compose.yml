@@ -27,6 +27,8 @@ services:
       - postgres
     volumes:
       - app-data:/var/lib/tgtldr
+    extra_hosts:
+      - host.docker.internal:host-gateway
 
   web:
     image: ${TGTLDR_IMAGE_NAMESPACE:-fr0der1c}/tgtldr-web:${TGTLDR_IMAGE_TAG:-latest}

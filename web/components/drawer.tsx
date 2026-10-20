@@ -1,6 +1,6 @@
 "use client";
 
-import { PropsWithChildren, ReactNode, useEffect, useState } from "react";
+import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const drawerTransitionDuration = 220;
@@ -25,6 +25,7 @@ export function Drawer({
 }>) {
   const [rendered, setRendered] = useState(open);
   const [visible, setVisible] = useState(false);
+  const previousOverflowRef = useRef<string>("");
 
   useEffect(() => {
     let firstFrame = 0;
@@ -58,7 +59,7 @@ export function Drawer({
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
+    previousOverflowRef.current = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     function onKeyDown(event: KeyboardEvent) {
@@ -69,7 +70,7 @@ export function Drawer({
 
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previousOverflowRef.current;
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [active, onClose, open, rendered]);

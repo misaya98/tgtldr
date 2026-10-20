@@ -1,6 +1,6 @@
 "use client";
 
-import { PropsWithChildren, ReactNode, useEffect } from "react";
+import { PropsWithChildren, ReactNode, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 export function Modal({
@@ -17,12 +17,14 @@ export function Modal({
   onClose: () => void;
   actions?: ReactNode;
 }>) {
+  const previousOverflowRef = useRef<string>("");
+
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
+    previousOverflowRef.current = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     function onKeyDown(event: KeyboardEvent) {
@@ -33,7 +35,7 @@ export function Modal({
 
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previousOverflowRef.current;
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [onClose, open]);
