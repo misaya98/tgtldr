@@ -288,3 +288,41 @@ func insertTopicTestChat(t *testing.T, st *Store) int64 {
 	}
 	return chatID
 }
+
+func TestSummaryRepositoryScopesByTopic(t *testing.T) {
+	st := topicTestStore(t)
+	ctx := t.Context()
+	chatID := insertTopicTestChat(t, st)
+	technical, err := st.Topics.UpsertDiscovered(ctx, chatID, model.ChatTopic{
+		TelegramTopicID: 458347, Title: "Technical",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roleplay, err := st.Topics.UpsertDiscovered(ctx, chatID, model.ChatTopic{
+		TelegramTopicID: 7310786, Title: "Roleplay",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	date := "2026-10-25"
+	for _, topicID := range []int64{0, technical.ID, roleplay.ID} {
+		if err := st.Summaries.UpsertPendingWithTopic(ctx, chatID, topicID, date, model.BotSummaryDeliveryModePerChat); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var count int
+	if err := st.Pool.QueryRow(ctx, `select count(*) from summaries where chat_id=$1 and summary_date=$2`, chatID, date).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Fatalf("summary scopes = %d, want 3", count)
+	}
+	topicSummary, err := st.Summaries.GetByChatTopicAndDate(ctx, chatID, technical.ID, date)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if topicSummary.TopicID != technical.ID || topicSummary.TopicTitle != "Technical" {
+		t.Fatalf("unexpected topic summary: %+v", topicSummary)
+	}
+}

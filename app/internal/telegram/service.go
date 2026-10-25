@@ -379,12 +379,21 @@ func (s *Service) storeIncomingMessage(ctx context.Context, accountID int64, ent
 	senderID, senderName, senderUsername, senderIsBot := resolveSender(msg, entities, chat.Title)
 	telegramTopicID, _, _ := resolveMessageTopic(msg, chat.IsForum)
 	topicID := int64(0)
+	topicResolved := false
+	var topic model.ChatTopic
 	if chat.IsForum {
 		if resolved, resolveErr := s.store.Topics.ResolveInternalID(ctx, chat.ID, int64(telegramTopicID)); resolveErr == nil {
 			topicID = resolved
+			if storedTopic, getErr := s.store.Topics.GetByID(ctx, chat.ID, resolved); getErr == nil {
+				topic = storedTopic
+				topicResolved = true
+			}
 		} else if !store.IsNotFound(resolveErr) {
 			return resolveErr
 		}
+	}
+	if !shouldStoreTopicMessage(chat, topic, topicResolved) {
+		return nil
 	}
 	senderEntityID := int64(0)
 	if entity, ok := senderEntityFromUpdate(accountID, msg, entities); ok {

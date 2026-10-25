@@ -48,11 +48,13 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 	const [externalSummary, setExternalSummary] = useState<Summary | null>(null);
 	const [detailOpen, setDetailOpen] = useState(false);
 	const [selectedChatId, setSelectedChatId] = useState("");
+	const [selectedTopicId, setSelectedTopicId] = useState("0");
 	const [manualDate, setManualDate] = useState(localDateInputValue());
 	const [filter, setFilter] = useState<SummaryFilter>("all");
 	const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>("all");
 	const [query, setQuery] = useState("");
 	const [chatFilter, setChatFilter] = useState(initialChatId);
+	const [topicFilter, setTopicFilter] = useState("all");
 	const [dateFrom, setDateFrom] = useState("");
 	const [dateTo, setDateTo] = useState("");
 	const [page, setPage] = useState(1);
@@ -69,6 +71,7 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 		() => ({
 			q: deferredQuery.trim(),
 			chatId: chatFilter,
+			topicId: topicFilter,
 			status: filter,
 			delivery: deliveryFilter,
 			dateFrom,
@@ -76,7 +79,7 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 			page,
 			pageSize,
 		}),
-		[chatFilter, dateFrom, dateTo, deferredQuery, deliveryFilter, filter, page, pageSize],
+		[chatFilter, topicFilter, dateFrom, dateTo, deferredQuery, deliveryFilter, filter, page, pageSize],
 	);
 
 	useEffect(() => {
@@ -90,7 +93,7 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 
 	useEffect(() => {
 		setPage(1);
-	}, [deferredQuery, chatFilter, filter, deliveryFilter, dateFrom, dateTo]);
+	}, [deferredQuery, chatFilter, topicFilter, filter, deliveryFilter, dateFrom, dateTo]);
 
 	useEffect(() => {
 		if (summaries.length === 0 && !externalSummary) {
@@ -128,7 +131,7 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 
 	async function loadMeta() {
 		try {
-			const [chatData, settingsData] = await Promise.all([api.listChats(), api.settings()]);
+			const [chatData, settingsData] = await Promise.all([api.listChats({ includeTopics: true }), api.settings()]);
 			const manualChats = chatData.filter((chat) => chat.summaryEnabled);
 			setAllChats(chatData);
 			setChats(manualChats);
@@ -196,7 +199,7 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 		}
 
 		try {
-			await api.runSummary(Number(selectedChatId), manualDate);
+			await api.runSummary(Number(selectedChatId), manualDate, Number(selectedTopicId));
 			toast.showSuccess("已提交摘要生成任务。");
 			setManualEditorOpen(false);
 			await Promise.all([loadRef.current(), loadStatsRef.current()]);
@@ -209,6 +212,7 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 	function applyMetricFilter(nextFilter: SummaryFilter) {
 		setQuery("");
 		setChatFilter("all");
+		setTopicFilter("all");
 		setFilter(nextFilter);
 		setDeliveryFilter("all");
 		setDateFrom("");
@@ -222,6 +226,21 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 	const chatTitles = useMemo(() => {
 		return new Map(allChats.map((chat) => [chat.id, chat.title]));
 	}, [allChats]);
+
+	const selectedManualChat = useMemo(
+		() => allChats.find((chat) => String(chat.id) === selectedChatId) ?? null,
+		[allChats, selectedChatId],
+	);
+	const manualTopicOptions = useMemo(() => {
+		if (!selectedManualChat?.isForum) return [];
+		return (selectedManualChat.topics ?? []).filter((topic) => topic.enabled && topic.summaryEnabled && !topic.isDeleted);
+	}, [selectedManualChat]);
+
+	const filterTopicOptions = useMemo(() => {
+		const chat = allChats.find((item) => String(item.id) === chatFilter);
+		if (!chat?.isForum) return [];
+		return (chat.topics ?? []).filter((topic) => !topic.isDeleted);
+	}, [allChats, chatFilter]);
 
 	const selectedSummary = useMemo(
 		() => summaries.find((item) => item.id === selectedSummaryId) ??
@@ -308,7 +327,13 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 					filter={filter}
 					loadSummaryDate={manualDate}
 					manualEditorOpen={manualEditorOpen}
-					onChatFilterChange={setChatFilter}
+					onChatFilterChange={(value) => {
+						setChatFilter(value);
+						setTopicFilter("all");
+					}}
+					onTopicFilterChange={setTopicFilter}
+					topicFilter={topicFilter}
+					topicFilterOptions={filterTopicOptions}
 					onDateFromChange={setDateFrom}
 					onDateToChange={setDateTo}
 					onDeliveryFilterChange={setDeliveryFilter}
@@ -318,7 +343,13 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 					onManualRun={runManual}
 					onPageChange={setPage}
 					onQueryChange={setQuery}
-					onSelectedChatChange={setSelectedChatId}
+					onSelectedChatChange={(value) => {
+						setSelectedChatId(value);
+						setSelectedTopicId("0");
+					}}
+					onSelectedTopicChange={setSelectedTopicId}
+					selectedTopicId={selectedTopicId}
+					topicOptions={manualTopicOptions}
 					onSelectSummary={(summaryId) => {
 						setExternalSummary(null);
 						setSelectedSummaryId(summaryId);

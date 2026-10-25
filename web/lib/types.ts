@@ -253,6 +253,8 @@ export type HistoryBackfillTask = {
 export type Summary = {
   id: number;
   chatId: number;
+  topicId: number;
+  topicTitle?: string;
   summaryDate: string;
   status: "pending" | "running" | "succeeded" | "failed";
   content: string;
@@ -286,6 +288,7 @@ export type Summary = {
 export type SummarySearchFilters = {
   q?: string;
   chatId?: string;
+  topicId?: string;
   status?: "all" | "processing" | Summary["status"];
   delivery?: "all" | "sent" | "pending" | "failed" | "disabled";
   dateFrom?: string;

@@ -286,6 +286,7 @@ export const api = {
       `/api/summaries${buildQuery({
         q: filters?.q?.trim() || undefined,
         chatId: filters?.chatId && filters.chatId !== "all" ? filters.chatId : undefined,
+        topicId: filters?.topicId && filters.topicId !== "all" ? filters.topicId : undefined,
         status: filters?.status && filters.status !== "all" ? filters.status : undefined,
         delivery: filters?.delivery && filters.delivery !== "all" ? filters.delivery : undefined,
         dateFrom: filters?.dateFrom || undefined,
@@ -304,10 +305,10 @@ export const api = {
     request(`/api/summaries/${summaryId}/retry-delivery`, {
       method: "POST",
     }),
-  runSummary: (chatId: number, date: string) =>
+  runSummary: (chatId: number, date: string, topicId = 0) =>
     request("/api/summaries/run", {
       method: "POST",
-      body: JSON.stringify({ chatId, date }),
+      body: JSON.stringify({ chatId, date, topicId }),
     }),
   createCatchUp: (payload: {
     fromDate: string;

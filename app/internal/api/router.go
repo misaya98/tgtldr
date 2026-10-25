@@ -802,6 +802,14 @@ func (r *Router) handleSummaries(w http.ResponseWriter, req *http.Request) {
 		}
 		params.ChatID = chatID
 	}
+	if topicIDValue := strings.TrimSpace(req.URL.Query().Get("topicId")); topicIDValue != "" {
+		topicID, err := strconv.ParseInt(topicIDValue, 10, 64)
+		if err != nil || topicID < 0 {
+			httpx.Error(w, http.StatusBadRequest, "invalid topicId")
+			return
+		}
+		params.TopicID = topicID
+	}
 
 	if pageValue := strings.TrimSpace(req.URL.Query().Get("page")); pageValue != "" {
 		page, err := strconv.Atoi(pageValue)
@@ -876,8 +884,9 @@ func (r *Router) handleRunSummary(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var payload struct {
-		ChatID int64  `json:"chatId"`
-		Date   string `json:"date"`
+		ChatID  int64  `json:"chatId"`
+		TopicID int64  `json:"topicId"`
+		Date    string `json:"date"`
 	}
 	if err := httpx.DecodeJSON(req, &payload); err != nil {
 		httpx.Error(w, http.StatusBadRequest, err.Error())
@@ -889,15 +898,26 @@ func (r *Router) handleRunSummary(w http.ResponseWriter, req *http.Request) {
 		httpx.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
-	started, err := r.scheduler.RunNowAsync(req.Context(), chat, payload.Date)
+	if payload.TopicID > 0 {
+		topic, err := r.store.Topics.GetByID(req.Context(), payload.ChatID, payload.TopicID)
+		if err != nil {
+			httpx.Error(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if !topic.Enabled || !topic.SummaryEnabled {
+			httpx.Error(w, http.StatusBadRequest, r.localized(req.Context(), "该话题未启用存储或 AI 总结。", "This topic does not have collection and AI summaries enabled."))
+			return
+		}
+	}
+	started, err := r.scheduler.RunNowAsyncWithTopic(req.Context(), chat, payload.TopicID, payload.Date)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	message := fmt.Sprintf("summary queued for chat %d on %s", payload.ChatID, payload.Date)
+	message := fmt.Sprintf("summary queued for chat %d topic %d on %s", payload.ChatID, payload.TopicID, payload.Date)
 	if !started {
-		message = fmt.Sprintf("summary already running for chat %d on %s", payload.ChatID, payload.Date)
+		message = fmt.Sprintf("summary already running for chat %d topic %d on %s", payload.ChatID, payload.TopicID, payload.Date)
 	}
 
 	httpx.JSON(w, http.StatusAccepted, map[string]string{

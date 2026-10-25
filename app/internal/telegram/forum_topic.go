@@ -1,6 +1,9 @@
 package telegram
 
-import "github.com/gotd/td/tg"
+import (
+	"github.com/fr0der1c/tgtldr/app/internal/model"
+	"github.com/gotd/td/tg"
+)
 
 const generalForumTopicID = 1
 
@@ -32,4 +35,15 @@ func replyToTopID(msg *tg.Message) int {
 		return 0
 	}
 	return header.ReplyToTopID
+}
+
+// shouldStoreTopicMessage 判断论坛消息是否应落库。无法解析话题时保留消息，避免数据丢失。
+func shouldStoreTopicMessage(chat model.Chat, topic model.ChatTopic, topicResolved bool) bool {
+	if !chat.IsForum {
+		return true
+	}
+	if !topicResolved {
+		return true
+	}
+	return topic.Enabled
 }

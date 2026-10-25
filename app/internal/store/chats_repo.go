@@ -225,7 +225,7 @@ func (r *ChatRepository) ListSummaryEnabled(ctx context.Context) ([]model.Chat, 
 	}
 	defer rows.Close()
 
-	out := make([]model.Chat, 0)
+	chats := make([]model.Chat, 0)
 	for rows.Next() {
 		var chat model.Chat
 		err := rows.Scan(
@@ -254,9 +254,22 @@ func (r *ChatRepository) ListSummaryEnabled(ctx context.Context) ([]model.Chat, 
 		if err != nil {
 			return nil, fmt.Errorf("scan summary enabled chat: %w", err)
 		}
-		out = append(out, chat)
+		chats = append(chats, chat)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for index := range chats {
+		if !chats[index].IsForum {
+			continue
+		}
+		topics, err := (&TopicRepository{pool: r.pool}).ListByChat(ctx, chats[index].ID)
+		if err != nil {
+			return nil, err
+		}
+		chats[index].Topics = topics
+	}
+	return chats, nil
 }
 
 func (r *ChatRepository) GetByTelegramID(ctx context.Context, telegramID int64) (model.Chat, error) {

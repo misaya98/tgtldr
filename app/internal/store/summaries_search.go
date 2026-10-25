@@ -19,6 +19,7 @@ var markdownLinkPattern = regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
 type SummaryListParams struct {
 	Query    string
 	ChatID   int64
+	TopicID  int64
 	Status   string
 	Delivery string
 	DateFrom string
@@ -52,6 +53,10 @@ func buildSummaryWhereClause(params SummaryListParams, terms []string) (string, 
 	if params.ChatID > 0 {
 		args = append(args, params.ChatID)
 		clauses = append(clauses, fmt.Sprintf("s.chat_id = $%d", len(args)))
+	}
+	if params.TopicID > 0 {
+		args = append(args, params.TopicID)
+		clauses = append(clauses, fmt.Sprintf("s.topic_id = $%d", len(args)))
 	}
 	if params.Status == "processing" {
 		clauses = append(clauses, "s.status in ('pending', 'running')")

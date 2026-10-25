@@ -102,9 +102,9 @@ func (s *Service) recoverSummary(ctx context.Context, job store.RecoveryItem) er
 	}
 	retry := job.Started && item.Status == model.SummaryStatusFailed
 	if retry {
-		err = s.RunRetry(ctx, chat, item.SummaryDate)
+		err = s.RunTopicRetry(ctx, chat, item.TopicID, item.SummaryDate)
 	} else {
-		err = s.RunNow(ctx, chat, item.SummaryDate)
+		err = s.RunTopicNow(ctx, chat, item.TopicID, item.SummaryDate)
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -114,7 +114,7 @@ func (s *Service) recoverSummary(ctx context.Context, job store.RecoveryItem) er
 		return saveErr
 	}
 	if err != nil {
-		if saveErr := s.store.Summaries.SetFailed(ctx, item.ChatID, item.SummaryDate, err.Error()); saveErr != nil {
+		if saveErr := s.store.Summaries.SetFailedWithTopic(ctx, item.ChatID, item.TopicID, item.SummaryDate, err.Error()); saveErr != nil {
 			return saveErr
 		}
 		return s.finishRecovery(ctx, job, err)

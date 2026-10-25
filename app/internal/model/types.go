@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type DeliveryMode string
 
@@ -300,6 +303,8 @@ func (m Message) SummaryText() string {
 type Summary struct {
 	ID                               int64                  `json:"id"`
 	ChatID                           int64                  `json:"chatId"`
+	TopicID                          int64                  `json:"topicId"`
+	TopicTitle                       string                 `json:"topicTitle,omitempty"`
 	SummaryDate                      string                 `json:"summaryDate"`
 	Status                           SummaryStatus          `json:"status"`
 	Content                          string                 `json:"content"`
@@ -331,6 +336,11 @@ type Summary struct {
 	MatchedFields                    []string               `json:"matchedFields,omitempty"`
 	CreatedAt                        time.Time              `json:"createdAt"`
 	UpdatedAt                        time.Time              `json:"updatedAt"`
+}
+
+// SummaryScopeKey 返回摘要的稳定唯一身份，0 表示整群摘要。
+func (s Summary) SummaryScopeKey() string {
+	return fmt.Sprintf("%d:%d:%s", s.ChatID, s.TopicID, s.SummaryDate)
 }
 
 type SummaryListResponse struct {

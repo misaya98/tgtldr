@@ -58,8 +58,8 @@ func (s *Service) retryHistoricalItem(ctx context.Context, settings model.AppSet
 	if err != nil {
 		return err
 	}
-	if err = s.RunRetry(ctx, chat, summary.SummaryDate); err != nil && ctx.Err() == nil {
-		if saveErr := s.store.Summaries.SetFailed(ctx, chat.ID, summary.SummaryDate, err.Error()); saveErr != nil {
+	if err = s.RunTopicRetry(ctx, chat, summary.TopicID, summary.SummaryDate); err != nil && ctx.Err() == nil {
+		if saveErr := s.store.Summaries.SetFailedWithTopic(ctx, chat.ID, summary.TopicID, summary.SummaryDate, err.Error()); saveErr != nil {
 			return saveErr
 		}
 	}

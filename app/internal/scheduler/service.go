@@ -54,6 +54,29 @@ func NewService(
 	}
 }
 
+type summaryScope struct {
+	TopicID    int64
+	TopicTitle string
+}
+
+// summaryScopesForChat 返回该群需要生成摘要的作用域。论坛群按话题拆分，普通群保持整群。
+func summaryScopesForChat(chat model.Chat) []summaryScope {
+	if !chat.SummaryEnabled {
+		return nil
+	}
+	if !chat.IsForum {
+		return []summaryScope{{}}
+	}
+	scopes := make([]summaryScope, 0, len(chat.Topics))
+	for _, topic := range chat.Topics {
+		if topic.IsDeleted || !topic.Enabled || !topic.SummaryEnabled {
+			continue
+		}
+		scopes = append(scopes, summaryScope{TopicID: topic.ID, TopicTitle: topic.Title})
+	}
+	return scopes
+}
+
 func (s *Service) ContextPreview(ctx context.Context, item model.Summary) (model.SummaryContextPreview, error) {
 	return s.summaries.BuildContextPreview(ctx, item)
 }
@@ -100,6 +123,27 @@ func (s *Service) RunRetry(ctx context.Context, chat model.Chat, date string) er
 	return s.executeSummary(ctx, chat, date)
 }
 
+func (s *Service) RunTopicNow(ctx context.Context, chat model.Chat, topicID int64, date string) error {
+	key := summaryTaskKeyWithTopic(chat.ID, topicID, date)
+	if !s.beginTask(key) {
+		return nil
+	}
+	defer s.finishTask(key)
+	return s.runTopicNow(ctx, chat, topicID, date)
+}
+
+func (s *Service) RunTopicRetry(ctx context.Context, chat model.Chat, topicID int64, date string) error {
+	key := summaryTaskKeyWithTopic(chat.ID, topicID, date)
+	if !s.beginTask(key) {
+		return nil
+	}
+	defer s.finishTask(key)
+	if err := s.store.Summaries.SetRetryRunningWithTopic(ctx, chat.ID, topicID, date); err != nil {
+		return err
+	}
+	return s.executeTopicSummary(ctx, chat, topicID, date)
+}
+
 func (s *Service) RunNowAsync(ctx context.Context, chat model.Chat, date string) (bool, error) {
 	key := summaryTaskKey(chat.ID, date)
 	if !s.beginTask(key) {
@@ -124,7 +168,38 @@ func (s *Service) RunNowAsync(ctx context.Context, chat model.Chat, date string)
 		defer s.finishTask(key)
 		runCtx := context.Background()
 		if err := s.executeSummary(runCtx, chat, date); err != nil {
-			_ = s.store.Summaries.SetFailed(context.Background(), chat.ID, date, err.Error())
+			_ = s.store.Summaries.SetFailedWithTopic(context.Background(), chat.ID, 0, date, err.Error())
+		}
+	}()
+	return true, nil
+}
+
+func (s *Service) RunNowAsyncWithTopic(ctx context.Context, chat model.Chat, topicID int64, date string) (bool, error) {
+	if topicID > 0 && !chat.IsForum {
+		return false, fmt.Errorf("topic scope requires a forum supergroup")
+	}
+	key := summaryTaskKeyWithTopic(chat.ID, topicID, date)
+	if !s.beginTask(key) {
+		return false, nil
+	}
+	deliveryMode, err := s.deliveryModeForDate(ctx, date)
+	if err != nil {
+		s.finishTask(key)
+		return false, err
+	}
+	if err := s.store.Summaries.UpsertPendingWithTopic(ctx, chat.ID, topicID, date, deliveryMode); err != nil {
+		s.finishTask(key)
+		return false, err
+	}
+	if err := s.store.Summaries.SetRunningWithTopic(ctx, chat.ID, topicID, date); err != nil {
+		s.finishTask(key)
+		return false, err
+	}
+	go func() {
+		defer s.finishTask(key)
+		runCtx := context.Background()
+		if err := s.executeTopicSummary(runCtx, chat, topicID, date); err != nil {
+			_ = s.store.Summaries.SetFailedWithTopic(context.Background(), chat.ID, topicID, date, err.Error())
 		}
 	}()
 	return true, nil
@@ -201,6 +276,42 @@ func (s *Service) RepairEmptySummariesInRange(ctx context.Context, chat model.Ch
 	return nil
 }
 
+func (s *Service) runTopicNow(ctx context.Context, chat model.Chat, topicID int64, date string) error {
+	deliveryMode, err := s.deliveryModeForDate(ctx, date)
+	if err != nil {
+		return err
+	}
+	if err := s.store.Summaries.UpsertPendingWithTopic(ctx, chat.ID, topicID, date, deliveryMode); err != nil {
+		return err
+	}
+	if err := s.store.Summaries.SetRunningWithTopic(ctx, chat.ID, topicID, date); err != nil {
+		return err
+	}
+	return s.executeTopicSummary(ctx, chat, topicID, date)
+}
+
+func (s *Service) executeTopicSummary(ctx context.Context, chat model.Chat, topicID int64, date string) error {
+	result, err := s.summaries.RunDailyTopicSummary(ctx, chat, topicID, date)
+	if err != nil {
+		return err
+	}
+	if err := s.store.Summaries.SaveResult(ctx, result); err != nil {
+		return err
+	}
+	if result.Status != model.SummaryStatusSucceeded {
+		if result.RetryableError {
+			return s.scheduleNextRetryWithTopic(ctx, result)
+		}
+		return nil
+	}
+	storedResult, err := s.store.Summaries.GetByChatAndDateWithScope(ctx, result.ChatID, topicID, result.SummaryDate)
+	if err != nil {
+		return err
+	}
+	s.tryDeliverSummary(ctx, chat, storedResult)
+	return nil
+}
+
 func (s *Service) runNow(ctx context.Context, chat model.Chat, date string) error {
 	deliveryMode, err := s.deliveryModeForDate(ctx, date)
 	if err != nil {
@@ -266,33 +377,62 @@ func (s *Service) runOnce(ctx context.Context) error {
 		if !isDue(now, chat, timezone) {
 			continue
 		}
-		group.Go(func() error {
-			deliveryMode := model.ResolveBotSummaryDeliveryMode(settings, date)
-			if err := s.store.Summaries.SetBotSummaryDeliveryMode(groupCtx, chat.ID, date, deliveryMode); err != nil {
-				return err
-			}
-			item, found, err := s.lookupSummary(groupCtx, chat.ID, date)
-			if err != nil {
-				return err
-			}
-
-			switch decideScheduledAction(chat, item, found, timezone, settings, now) {
-			case scheduledActionSkip:
-				return nil
-			case scheduledActionRetry:
-				return s.RunRetry(groupCtx, chat, date)
-			case scheduledActionDeliver:
-				s.deliverExistingSummary(groupCtx, chat, item)
-				return nil
-			default:
-				return s.RunNow(groupCtx, chat, date)
-			}
-		})
+		for _, scope := range summaryScopesForChat(chat) {
+			scope := scope
+			group.Go(func() error {
+				deliveryMode := model.ResolveBotSummaryDeliveryMode(settings, date)
+				if err := s.store.Summaries.SetBotSummaryDeliveryModeWithTopic(groupCtx, chat.ID, scope.TopicID, date, deliveryMode); err != nil {
+					return err
+				}
+				item, found, err := s.lookupSummaryWithTopic(groupCtx, chat.ID, scope.TopicID, date)
+				if err != nil {
+					return err
+				}
+				switch decideScheduledAction(chat, item, found, timezone, settings, now) {
+				case scheduledActionSkip:
+					return nil
+				case scheduledActionRetry:
+					return s.RunTopicRetry(groupCtx, chat, scope.TopicID, date)
+				case scheduledActionDeliver:
+					s.deliverExistingSummary(groupCtx, chat, item)
+					return nil
+				default:
+					return s.RunTopicNow(groupCtx, chat, scope.TopicID, date)
+				}
+			})
+		}
 	}
 	if err := group.Wait(); err != nil {
 		return err
 	}
 	return s.dailyDigests.RunIfReady(ctx, settings, chats, date)
+}
+
+func (s *Service) lookupSummaryWithTopic(ctx context.Context, chatID, topicID int64, date string) (model.Summary, bool, error) {
+	item, err := s.store.Summaries.GetByChatAndDateWithScope(ctx, chatID, topicID, date)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.Summary{}, false, nil
+	}
+	if err != nil {
+		return model.Summary{}, false, err
+	}
+	return item, true, nil
+}
+
+func (s *Service) scheduleNextRetryWithTopic(ctx context.Context, result model.Summary) error {
+	settings, err := s.store.Settings.Get(ctx)
+	if err != nil {
+		return err
+	}
+	item, err := s.store.Summaries.GetByChatAndDateWithScope(ctx, result.ChatID, result.TopicID, result.SummaryDate)
+	if err != nil {
+		return err
+	}
+	nextRetryAt, ok := nextSummaryRetryAt(settings, item.RetryCount, s.clock.Now())
+	if !ok {
+		return nil
+	}
+	return s.store.Summaries.ScheduleRetryWithTopic(ctx, result.ChatID, result.TopicID, result.SummaryDate, nextRetryAt)
 }
 
 func (s *Service) scheduleNextRetry(ctx context.Context, result model.Summary) error {
@@ -353,7 +493,11 @@ func (s *Service) deliverSummary(ctx context.Context, settings model.AppSettings
 }
 
 func buildBotDeliveryMessage(chat model.Chat, result model.Summary) string {
-	header := fmt.Sprintf("**%s · %s**", chat.Title, result.SummaryDate)
+	title := chat.Title
+	if strings.TrimSpace(result.TopicTitle) != "" {
+		title = chat.Title + " · " + result.TopicTitle
+	}
+	header := fmt.Sprintf("**%s · %s**", title, result.SummaryDate)
 	content := strings.TrimSpace(result.Content)
 	if content == "" {
 		return header
@@ -502,6 +646,10 @@ func loadSummaryLocation(timezone string) (*time.Location, error) {
 		return time.Local, nil
 	}
 	return time.LoadLocation(timezone)
+}
+
+func summaryTaskKeyWithTopic(chatID, topicID int64, date string) string {
+	return fmt.Sprintf("%d:%d:%s", chatID, topicID, date)
 }
 
 func summaryTaskKey(chatID int64, date string) string {

@@ -27,6 +27,8 @@ type SummaryListSectionProps = {
 	allChats: Chat[];
 	botReady: boolean;
 	chatFilter: string;
+	topicFilter: string;
+	topicFilterOptions: Chat["topics"];
 	chats: Chat[];
 	dateFrom: string;
 	dateTo: string;
@@ -44,6 +46,7 @@ type SummaryListSectionProps = {
 	total: number;
 	totalPages: number;
 	onChatFilterChange: (value: string) => void;
+	onTopicFilterChange: (value: string) => void;
 	onDateFromChange: (value: string) => void;
 	onDateToChange: (value: string) => void;
 	onDeliveryFilterChange: (value: DeliveryFilter) => void;
@@ -54,6 +57,9 @@ type SummaryListSectionProps = {
 	onPageChange: (value: number) => void;
 	onQueryChange: (value: string) => void;
 	onSelectedChatChange: (value: string) => void;
+	onSelectedTopicChange: (value: string) => void;
+	selectedTopicId: string;
+	topicOptions: Chat["topics"];
 	onSelectSummary: (summaryId: number) => void;
 	chatTitles: Map<number, string>;
 };
@@ -65,6 +71,8 @@ export function SummaryListSection(props: SummaryListSectionProps) {
 		allChats,
 		botReady,
 		chatFilter,
+		topicFilter,
+		topicFilterOptions,
 		chats,
 		dateFrom,
 		dateTo,
@@ -82,6 +90,7 @@ export function SummaryListSection(props: SummaryListSectionProps) {
 		total,
 		totalPages,
 		onChatFilterChange,
+		onTopicFilterChange,
 		onDateFromChange,
 		onDateToChange,
 		onDeliveryFilterChange,
@@ -92,6 +101,9 @@ export function SummaryListSection(props: SummaryListSectionProps) {
 		onPageChange,
 		onQueryChange,
 		onSelectedChatChange,
+		onSelectedTopicChange,
+		selectedTopicId,
+		topicOptions,
 		onSelectSummary,
 		chatTitles,
 	} = props
@@ -133,6 +145,24 @@ export function SummaryListSection(props: SummaryListSectionProps) {
 						value={chatFilter}
 					/>
 				</Field>
+				{topicFilterOptions && topicFilterOptions.length > 0 ? (
+					<Field label="话题">
+						<SearchSelect
+							emptyText="没有匹配的话题"
+							onChange={onTopicFilterChange}
+							options={[
+								{ value: "all", label: "全部话题" },
+								...topicFilterOptions.map((topic) => ({
+									value: String(topic.id),
+									label: topic.title || "General",
+								})),
+							]}
+							placeholder="全部话题"
+							searchPlaceholder="搜索话题"
+							value={topicFilter}
+						/>
+					</Field>
+				) : null}
 				<Field label="生成状态">
 					<AppSelect
 						onChange={(value) => onFilterChange(value as SummaryFilter)}
@@ -205,6 +235,21 @@ export function SummaryListSection(props: SummaryListSectionProps) {
 								<Field label="日期">
 									<Input onChange={(event) => onLoadSummaryDateChange(event.target.value)} type="date" value={loadSummaryDate} />
 								</Field>
+								{topicOptions && topicOptions.length > 0 ? (
+									<Field label="话题">
+										<SearchSelect
+											emptyText="没有匹配的话题"
+											onChange={onSelectedTopicChange}
+											options={topicOptions.map((topic) => ({
+												value: String(topic.id),
+												label: topic.title || "General",
+											}))}
+											placeholder="选择话题"
+											searchPlaceholder="搜索话题"
+											value={selectedTopicId}
+										/>
+									</Field>
+								) : null}
 							</div>
 							<div className="summary-manual-actions">
 								<Button onClick={() => startTransition(() => void onManualRun())} type="button">
@@ -239,7 +284,7 @@ export function SummaryListSection(props: SummaryListSectionProps) {
 									type="button"
 								>
 									<div className="entity-row-main">
-										<strong>{chatTitles.get(item.chatId) ?? "未知群组"}</strong>
+										<strong>{chatTitles.get(item.chatId) ?? "未知群组"}{item.topicTitle ? ` · ${item.topicTitle}` : ""}</strong>
 										<p>
 											{item.summaryDate} · {summaryModelLabel(item, language)} · {messageCountText}
 										</p>

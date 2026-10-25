@@ -189,12 +189,21 @@ func (s *Service) runHistoryBackfillAttempt(
 			if !ok {
 				continue
 			}
+			topicResolved := false
+			var topic model.ChatTopic
 			if chat.IsForum && item.TelegramTopicID != 0 {
 				if resolved, resolveErr := s.store.Topics.ResolveInternalID(ctx, chat.ID, int64(item.TelegramTopicID)); resolveErr == nil {
 					item.TopicID = resolved
+					if storedTopic, getErr := s.store.Topics.GetByID(ctx, chat.ID, resolved); getErr == nil {
+						topic = storedTopic
+						topicResolved = true
+					}
 				} else if !store.IsNotFound(resolveErr) {
 					return resolveErr
 				}
+			}
+			if !shouldStoreTopicMessage(chat, topic, topicResolved) {
+				continue
 			}
 			msg := elem.Msg.(*tg.Message)
 			if entity, ok := senderEntityFromHistory(chat.CollectorAccountID, msg, elem.Entities); ok {

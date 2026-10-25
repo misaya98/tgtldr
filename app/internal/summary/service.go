@@ -46,18 +46,22 @@ func (s *Service) BuildContextPreview(ctx context.Context, summary model.Summary
 		return model.SummaryContextPreview{}, err
 	}
 
-	messages, err := s.store.Messages.ListForRange(ctx, chat.ID, start, end)
+	messages, err := s.store.Messages.ListForRange(ctx, chat.ID, start, end, summary.TopicID)
+	if err != nil {
+		return model.SummaryContextPreview{}, err
+	}
+	effectiveChat, err := s.effectiveTopicChat(ctx, chat, summary.TopicID)
 	if err != nil {
 		return model.SummaryContextPreview{}, err
 	}
 
-	filteredMessages, messageLookup, err := s.prepareMessages(ctx, chat, messages)
+	filteredMessages, messageLookup, err := s.prepareMessages(ctx, effectiveChat, messages)
 	if err != nil {
 		return model.SummaryContextPreview{}, err
 	}
-	stagePrompt := buildStagePrompt(settings.Language, chat.SummaryContext, chat.SummaryPrompt)
-	finalPrompt := buildFinalPrompt(settings.Language, chat.SummaryContext, chat.SummaryPrompt)
-	modelName := resolveSummaryModel(chat, settings)
+	stagePrompt := buildStagePrompt(settings.Language, effectiveChat.SummaryContext, effectiveChat.SummaryPrompt)
+	finalPrompt := buildFinalPrompt(settings.Language, effectiveChat.SummaryContext, effectiveChat.SummaryPrompt)
+	modelName := resolveSummaryModel(effectiveChat, settings)
 	budget := resolveSummaryBudget(settings, modelName, stagePrompt)
 	fullTranscript := BuildTranscript(filteredMessages, messageLookup, location, settings.Language)
 	directPlan := llmcontext.PlanRequest(budget.Counter, budget.ContextWindow, finalPrompt, fullTranscript, budget.FinalReserve)
@@ -97,12 +101,20 @@ func (s *Service) BuildContextPreview(ctx context.Context, summary model.Summary
 }
 
 func (s *Service) RunDailySummary(ctx context.Context, chat model.Chat, date string) (model.Summary, error) {
+	return s.RunDailyTopicSummary(ctx, chat, 0, date)
+}
+
+func (s *Service) RunDailyTopicSummary(ctx context.Context, chat model.Chat, topicID int64, date string) (model.Summary, error) {
 	settings, err := s.store.Settings.Get(ctx)
 	if err != nil {
 		return model.Summary{}, err
 	}
 
-	timezone := resolveSummaryTimezone(chat, settings.DefaultTimezone)
+	effectiveChat, err := s.effectiveTopicChat(ctx, chat, topicID)
+	if err != nil {
+		return model.Summary{}, err
+	}
+	timezone := resolveSummaryTimezone(effectiveChat, settings.DefaultTimezone)
 	location, err := loadLocation(timezone)
 	if err != nil {
 		return model.Summary{}, err
@@ -112,21 +124,22 @@ func (s *Service) RunDailySummary(ctx context.Context, chat model.Chat, date str
 		return model.Summary{}, err
 	}
 
-	messages, err := s.store.Messages.ListForRange(ctx, chat.ID, start, end)
+	messages, err := s.store.Messages.ListForRange(ctx, chat.ID, start, end, topicID)
 	if err != nil {
 		return model.Summary{}, err
 	}
-	filteredMessages, messageLookup, err := s.prepareMessages(ctx, chat, messages)
+	filteredMessages, messageLookup, err := s.prepareMessages(ctx, effectiveChat, messages)
 	if err != nil {
 		return model.Summary{}, err
 	}
 
 	summary := model.Summary{
 		ChatID:             chat.ID,
+		TopicID:            topicID,
 		SummaryDate:        date,
 		Status:             model.SummaryStatusSucceeded,
-		Model:              resolveSummaryModel(chat, settings),
-		RequestedModel:     resolveSummaryModel(chat, settings),
+		Model:              resolveSummaryModel(effectiveChat, settings),
+		RequestedModel:     resolveSummaryModel(effectiveChat, settings),
 		SourceMessageCount: len(filteredMessages),
 		GeneratedAt:        s.clock.Now(),
 	}
@@ -134,8 +147,42 @@ func (s *Service) RunDailySummary(ctx context.Context, chat model.Chat, date str
 		summary.Content = emptySummaryContent(settings.Language)
 		return summary, nil
 	}
+	return s.generateDailySummary(ctx, settings, effectiveChat, location, filteredMessages, messageLookup, summary)
+}
 
-	return s.generateDailySummary(ctx, settings, chat, location, filteredMessages, messageLookup, summary)
+// effectiveTopicChat 将话题覆盖项合并到父群配置，未覆盖字段继续继承父群。
+func (s *Service) effectiveTopicChat(ctx context.Context, chat model.Chat, topicID int64) (model.Chat, error) {
+	if topicID <= 0 || s.store == nil || s.store.Topics == nil {
+		return chat, nil
+	}
+	topic, err := s.store.Topics.GetByID(ctx, chat.ID, topicID)
+	if err != nil {
+		return model.Chat{}, err
+	}
+	if strings.TrimSpace(topic.SummaryContext) != "" {
+		chat.SummaryContext = strings.TrimSpace(chat.SummaryContext + "\n\n" + topic.SummaryContext)
+	}
+	if strings.TrimSpace(topic.SummaryPrompt) != "" {
+		chat.SummaryPrompt = strings.TrimSpace(chat.SummaryPrompt + "\n\n" + topic.SummaryPrompt)
+	}
+	if topic.SummaryTimeLocal != nil && strings.TrimSpace(*topic.SummaryTimeLocal) != "" {
+		chat.SummaryTimeLocal = strings.TrimSpace(*topic.SummaryTimeLocal)
+	}
+	if topic.SummaryTimezone != nil && strings.TrimSpace(*topic.SummaryTimezone) != "" {
+		chat.SummaryTimezone = strings.TrimSpace(*topic.SummaryTimezone)
+	}
+	if topic.ModelOverride != nil && strings.TrimSpace(*topic.ModelOverride) != "" {
+		chat.ModelOverride = strings.TrimSpace(*topic.ModelOverride)
+	}
+	if topic.DeliveryMode != nil && strings.TrimSpace(*topic.DeliveryMode) != "" {
+		chat.DeliveryMode = model.DeliveryMode(strings.TrimSpace(*topic.DeliveryMode))
+	}
+	if topic.KeepBotMessages != nil {
+		chat.KeepBotMessages = *topic.KeepBotMessages
+	}
+	chat.FilteredSenders = append(chat.FilteredSenders, topic.FilteredSenders...)
+	chat.FilteredKeywords = append(chat.FilteredKeywords, topic.FilteredKeywords...)
+	return chat, nil
 }
 
 func resolveSummaryModel(chat model.Chat, settings model.AppSettings) string {

@@ -6,6 +6,11 @@
 
 ### Added
 
+### Changed
+
+- Forum supergroups now generate summaries per topic, allowing a whole-chat summary and multiple topic summaries on the same day. The summaries page supports topic filtering and manual topic runs.
+- Topic message collection and AI summary switches now control live ingestion, history backfill, and summary generation.
+
 - Detect Telegram forum topics and manage message collection and AI summary settings per topic.
 - Show forum topics as a parent/child tree on the Chats page, with topic refresh, quick toggles, and inheritance indicators.
 - Backfill confirmed historical topic membership from Telegram reply threads and filter chat history by topic.
