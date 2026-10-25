@@ -19,14 +19,16 @@ func (r *MessageRepository) ListWindowAround(
 	beforeCount int,
 	afterCount int,
 	filter MessageDisplayFilter,
+	topicIDs ...int64,
 ) ([]model.Message, bool, error) {
-	target, err := r.getMessageInRange(ctx, chatID, start, end, messageID, filter)
+	topicID := firstTopicID(topicIDs)
+	target, err := r.getMessageInRange(ctx, chatID, start, end, messageID, filter, topicID)
 	if err != nil {
 		return nil, false, err
 	}
 
 	before, err := r.listMessagesBeforeTarget(
-		ctx, chatID, start, end, target, beforeCount+2, filter,
+		ctx, chatID, start, end, target, beforeCount+2, filter, topicID,
 	)
 	if err != nil {
 		return nil, false, err
@@ -38,7 +40,7 @@ func (r *MessageRepository) ListWindowAround(
 	reverseMessages(before)
 
 	after, err := r.listMessagesAfterTarget(
-		ctx, chatID, start, end, target, afterCount, filter,
+		ctx, chatID, start, end, target, afterCount, filter, topicID,
 	)
 	if err != nil {
 		return nil, false, err
@@ -53,11 +55,13 @@ func (r *MessageRepository) getMessageInRange(
 	end time.Time,
 	messageID int64,
 	filter MessageDisplayFilter,
+	topicID int64,
 ) (model.Message, error) {
-	args := []any{chatID, start, end, messageID}
+	args := []any{chatID, start, end, messageID, topicID}
 	filterSQL, args := appendMessageDisplayFilter("m", args, filter)
 	row := r.pool.QueryRow(ctx, messageSelectSQL+`
-		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3 and m.id = $4`+
+		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3 and m.id = $4
+		  and ($5 = 0 or m.topic_id = $5)`+
 		filterSQL, args...)
 	message, err := scanMessage(row)
 	if err != nil {
@@ -77,13 +81,15 @@ func (r *MessageRepository) listMessagesBeforeTarget(
 	target model.Message,
 	limit int,
 	filter MessageDisplayFilter,
+	topicID int64,
 ) ([]model.Message, error) {
-	args := []any{chatID, start, end, target.MessageTime, target.TelegramMessageID}
+	args := []any{chatID, start, end, target.MessageTime, target.TelegramMessageID, topicID}
 	filterSQL, args := appendMessageDisplayFilter("m", args, filter)
 	args = append(args, limit)
 	return r.queryMessageWindow(ctx, messageSelectSQL+`
 		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3
-		  and (m.message_time, m.telegram_message_id) <= ($4, $5)`+filterSQL+`
+		  and (m.message_time, m.telegram_message_id) <= ($4, $5)
+		  and ($6 = 0 or m.topic_id = $6)`+filterSQL+`
 		order by m.message_time desc, m.telegram_message_id desc
 		limit $`+fmt.Sprint(len(args))+`
 	`, args...)
@@ -97,13 +103,15 @@ func (r *MessageRepository) listMessagesAfterTarget(
 	target model.Message,
 	limit int,
 	filter MessageDisplayFilter,
+	topicID int64,
 ) ([]model.Message, error) {
-	args := []any{chatID, start, end, target.MessageTime, target.TelegramMessageID}
+	args := []any{chatID, start, end, target.MessageTime, target.TelegramMessageID, topicID}
 	filterSQL, args := appendMessageDisplayFilter("m", args, filter)
 	args = append(args, limit)
 	return r.queryMessageWindow(ctx, messageSelectSQL+`
 		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3
-		  and (m.message_time, m.telegram_message_id) > ($4, $5)`+filterSQL+`
+		  and (m.message_time, m.telegram_message_id) > ($4, $5)
+		  and ($6 = 0 or m.topic_id = $6)`+filterSQL+`
 		order by m.message_time asc, m.telegram_message_id asc
 		limit $`+fmt.Sprint(len(args))+`
 	`, args...)
@@ -138,6 +146,6 @@ const messageSelectSQL = `
 	select id, chat_id, coalesce(sender_entity_id, 0), telegram_message_id, telegram_sender_id, sender_name,
 	       sender_username, sender_is_bot,
 	       text_content, caption, message_type, media_kind, reply_to_message_id,
-	       message_time, raw_json::text, created_at
+	       message_time, raw_json::text, created_at, topic_id
 	from messages m
 `

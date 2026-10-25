@@ -3,6 +3,7 @@ package telegram
 import (
 	"testing"
 
+	"github.com/fr0der1c/tgtldr/app/internal/model"
 	"github.com/gotd/td/tg"
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -18,5 +19,22 @@ func TestResolveSenderFallback(t *testing.T) {
 		So(name, ShouldEqual, "测试群")
 		So(username, ShouldBeEmpty)
 		So(isBot, ShouldBeFalse)
+	})
+}
+
+func TestMessageTopicResolutionForForumChat(t *testing.T) {
+	Convey("论坛消息会携带 Telegram 话题 ID", t, func() {
+		chat := model.Chat{ID: 10, Title: "ja-netfilter", ChatType: "supergroup", IsForum: true}
+		msg := &tg.Message{
+			ID:      2001,
+			PeerID:  &tg.PeerChannel{ChannelID: 1680975844},
+			ReplyTo: &tg.MessageReplyHeader{ReplyToMsgID: 458347, ReplyToTopID: 458347},
+		}
+
+		topicID, isForumMessage, ok := resolveMessageTopic(msg, chat.IsForum)
+
+		So(topicID, ShouldEqual, 458347)
+		So(isForumMessage, ShouldBeTrue)
+		So(ok, ShouldBeTrue)
 	})
 }

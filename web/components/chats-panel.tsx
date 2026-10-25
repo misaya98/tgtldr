@@ -15,7 +15,7 @@ import { AppSelect } from "@/components/app-select";
 import { ChatActivityStrip } from "@/components/chat-activity-strip";
 import { ChatHistorySearchForm } from "@/components/chat-history-search-form";
 import { GlobalChatMessageSearch } from "@/components/global-chat-message-search";
-import { BotSummaryDeliveryMode, Chat, TelegramAccountChat } from "@/lib/types";
+import { BotSummaryDeliveryMode, Chat, ChatTopic, TelegramAccountChat } from "@/lib/types";
 import { DashboardPage, EmptyState, MetricCard, MetricRail, Surface } from "@/components/dashboard-page";
 import { useToast } from "@/components/toast";
 import { Button, Field, Input, StatusPill, Textarea } from "@/components/ui";
@@ -37,6 +37,8 @@ export function ChatsPanel() {
   const [items, setItems] = useState<Chat[]>([]);
   const [savedItems, setSavedItems] = useState<Chat[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [expandedForumIDs, setExpandedForumIDs] = useState<Set<number>>(new Set());
+  const [busyTopicID, setBusyTopicID] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [chatType, setChatType] = useState<ChatTypeFilter>("all");
   const [messageSaveFilter, setMessageSaveFilter] = useState<SwitchFilter>("all");
@@ -55,7 +57,10 @@ export function ChatsPanel() {
 
   const load = useCallback(async () => {
     try {
-      const [chatData, settings] = await Promise.all([api.listChats(), api.settings()]);
+      const [chatData, settings] = await Promise.all([
+        api.listChats({ includeTopics: true }),
+        api.settings(),
+      ]);
       const chats = chatData.map(normalizeChat);
       setItems(chats);
       setSavedItems(chats);
@@ -101,6 +106,52 @@ export function ChatsPanel() {
     setItems((current) =>
       current.map((item) => (item.id === chatID ? { ...item, ...patch } : item))
     );
+  }
+
+  function toggleForum(chatID: number) {
+    setExpandedForumIDs((current) => {
+      const next = new Set(current);
+      if (next.has(chatID)) next.delete(chatID);
+      else next.add(chatID);
+      return next;
+    });
+  }
+
+  async function syncTopics(chat: Chat) {
+    try {
+      const topics = await api.syncChatTopics(chat.id);
+      setItems((current) =>
+        current.map((item) => (item.id === chat.id ? { ...item, topics } : item))
+      );
+      setExpandedForumIDs((current) => new Set(current).add(chat.id));
+      toast.showSuccess(`已刷新「${chat.title}」的话题。`);
+    } catch (err) {
+      toast.showError(asMessage(err));
+    }
+  }
+
+  async function saveTopic(chat: Chat, topic: ChatTopic, patch: Partial<ChatTopic>) {
+    if (busyTopicID === topic.id) return;
+    setBusyTopicID(topic.id);
+    try {
+      const saved = await api.saveChatTopic(chat.id, { ...topic, ...patch });
+      setItems((current) =>
+        current.map((item) =>
+          item.id === chat.id
+            ? {
+                ...item,
+                topics: (item.topics ?? []).map((entry) =>
+                  entry.id === saved.id ? saved : entry
+                ),
+              }
+            : item
+        )
+      );
+    } catch (err) {
+      toast.showError(asMessage(err));
+    } finally {
+      setBusyTopicID(null);
+    }
   }
 
   const filtered = useMemo(() => {
@@ -264,19 +315,24 @@ export function ChatsPanel() {
                   </thead>
                   <tbody>
                     {filtered.map((chat) => (
-                      <ChatTableRow
+                      <ChatTableGroup
                         key={chat.id}
-                        chat={chat}
                         botSummaryDeliveryMode={botSummaryDeliveryMode}
+                        busyTopicID={busyTopicID}
+                        chat={chat}
                         editing={editingId === chat.id}
+                        topicsExpanded={expandedForumIDs.has(chat.id)}
                         onBackfill={(fromDate, toDate) =>
                           startTransition(() => void startHistoryBackfill(chat, fromDate, toDate))
                         }
-                        onPatch={(patch) => patchChat(chat.id, patch)}
                         onEdit={() =>
                           setEditingId((current) => (current === chat.id ? null : chat.id))
                         }
+                        onPatch={(patch) => patchChat(chat.id, patch)}
                         onSave={() => startTransition(() => void saveChat(chat))}
+                        onSaveTopic={(topic, patch) => void saveTopic(chat, topic, patch)}
+                        onSyncTopics={() => startTransition(() => void syncTopics(chat))}
+                        onToggleForum={() => toggleForum(chat.id)}
                       />
                     ))}
                   </tbody>
@@ -306,6 +362,7 @@ function normalizeChat(chat: Chat): Chat {
     filteredSenders: Array.isArray(chat.filteredSenders) ? chat.filteredSenders : [],
     keepBotMessages: chat.keepBotMessages ?? true,
     messageActivity: Array.isArray(chat.messageActivity) ? chat.messageActivity : [],
+    topics: Array.isArray(chat.topics) ? chat.topics : [],
     availableAccounts: Array.isArray(chat.availableAccounts) ? chat.availableAccounts : []
   };
 }
@@ -321,22 +378,142 @@ function splitLines(value: string) {
     .filter(Boolean);
 }
 
+function ChatTableGroup({
+  botSummaryDeliveryMode,
+  busyTopicID,
+  chat,
+  editing,
+  topicsExpanded,
+  onBackfill,
+  onEdit,
+  onPatch,
+  onSave,
+  onSaveTopic,
+  onSyncTopics,
+  onToggleForum
+}: {
+  botSummaryDeliveryMode: BotSummaryDeliveryMode;
+  busyTopicID: number | null;
+  chat: Chat;
+  editing: boolean;
+  topicsExpanded: boolean;
+  onBackfill: (fromDate: string, toDate: string) => void;
+  onEdit: () => void;
+  onPatch: (patch: Partial<Chat>) => void;
+  onSave: () => void;
+  onSaveTopic: (topic: ChatTopic, patch: Partial<ChatTopic>) => void;
+  onSyncTopics: () => void;
+  onToggleForum: () => void;
+}) {
+  return (
+    <>
+      <ChatTableRow
+        botSummaryDeliveryMode={botSummaryDeliveryMode}
+        chat={chat}
+        editing={editing}
+        topicsExpanded={topicsExpanded}
+        onBackfill={onBackfill}
+        onEdit={onEdit}
+        onPatch={onPatch}
+        onSave={onSave}
+        onSyncTopics={onSyncTopics}
+        onToggleForum={onToggleForum}
+      />
+      {topicsExpanded
+        ? (chat.topics ?? []).map((topic) => (
+            <TopicTableRow
+              busy={busyTopicID === topic.id}
+              chat={chat}
+              key={topic.id}
+              onSaveTopic={onSaveTopic}
+              topic={topic}
+            />
+          ))
+        : null}
+    </>
+  );
+}
+
+function TopicTableRow({
+  busy,
+  chat,
+  onSaveTopic,
+  topic
+}: {
+  busy: boolean;
+  chat: Chat;
+  onSaveTopic: (topic: ChatTopic, patch: Partial<ChatTopic>) => void;
+  topic: ChatTopic;
+}) {
+  return (
+    <tr className="data-row topic-row" data-testid={`topic-row-${chat.id}-${topic.id}`}>
+      <td>
+        <div className="topic-identity">
+          <span aria-hidden="true" className="topic-branch">└</span>
+          <div>
+            <strong>{topic.title || "General"}</strong>
+            <div className="chat-secondary-line">
+              <span>Telegram topic #{topic.telegramTopicId}</span>
+              {topic.isClosed ? <span className="topic-chip">已关闭</span> : null}
+              {topic.isDeleted ? <span className="topic-chip danger">已失效</span> : null}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td>话题</td>
+      <td>
+        <button
+          aria-pressed={topic.enabled}
+          className={`status-toggle${topic.enabled ? " on" : ""}`}
+          disabled={busy}
+          onClick={() => onSaveTopic(topic, { enabled: !topic.enabled })}
+          type="button"
+        >
+          {topic.enabled ? "已启用" : "未启用"}
+        </button>
+      </td>
+      <td>
+        <button
+          aria-pressed={topic.summaryEnabled}
+          className={`status-toggle${topic.summaryEnabled ? " on" : ""}`}
+          disabled={busy}
+          onClick={() => onSaveTopic(topic, { summaryEnabled: !topic.summaryEnabled })}
+          type="button"
+        >
+          {topic.summaryEnabled ? "已启用" : "未启用"}
+        </button>
+      </td>
+      <td>
+        <span className="topic-inherit-note">
+          {topic.inherited.modelOverride ? "模型继承自群组" : "独立模型"}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
 function ChatTableRow({
   botSummaryDeliveryMode,
   chat,
   editing,
+  topicsExpanded,
   onBackfill,
-  onPatch,
   onEdit,
-  onSave
+  onPatch,
+  onSave,
+  onSyncTopics,
+  onToggleForum
 }: {
   botSummaryDeliveryMode: BotSummaryDeliveryMode;
   chat: Chat;
   editing: boolean;
+  topicsExpanded: boolean;
   onBackfill: (fromDate: string, toDate: string) => void;
-  onPatch: (patch: Partial<Chat>) => void;
   onEdit: () => void;
+  onPatch: (patch: Partial<Chat>) => void;
   onSave: () => void;
+  onSyncTopics: () => void;
+  onToggleForum: () => void;
 }) {
   const [historyMode, setHistoryMode] = useState<HistoryMode>("30d");
   const [historyFromDate, setHistoryFromDate] = useState(localDateOffset(-29));
@@ -353,10 +530,24 @@ function ChatTableRow({
 
   return (
     <>
-      <tr className={expanded ? "data-row active" : "data-row"}>
+      <tr
+        className={expanded ? "data-row active" : "data-row"}
+        data-testid={chat.isForum ? `forum-row-${chat.id}` : undefined}
+      >
         <td>
           <div className="data-row-title">
             <div className="chat-identity">
+              {chat.isForum ? (
+                <button
+                  aria-expanded={topicsExpanded}
+                  aria-label={topicsExpanded ? "收起话题" : "展开话题"}
+                  className="topic-disclosure"
+                  onClick={onToggleForum}
+                  type="button"
+                >
+                  {topicsExpanded ? "▾" : "▸"}
+                </button>
+              ) : null}
               <ChatAvatar key={chat.avatarUrl ?? "fallback"} src={chat.avatarUrl} />
               <div className="chat-identity-copy">
                 <Link
@@ -372,6 +563,9 @@ function ChatTableRow({
                       · {formatCollectorAccount(selectedCollectorAccount)}
                     </span>
                   ) : null}
+                  {chat.isForum ? (
+                    <span className="topic-chip">Forum · {chat.topics?.length ?? 0} 个话题</span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -383,7 +577,7 @@ function ChatTableRow({
             />
           </div>
         </td>
-        <td>{chat.chatType === "supergroup" ? "超级群组" : "群组"}</td>
+        <td>{chat.isForum ? "论坛超级群" : chat.chatType === "supergroup" ? "超级群组" : "群组"}</td>
         <td>
           <StatusPill tone={chat.enabled ? "good" : "neutral"}>
             {chat.enabled ? "已启用" : "未启用"}
@@ -396,6 +590,18 @@ function ChatTableRow({
         </td>
         <td>
           <div className="table-row-actions">
+            {chat.isForum ? (
+              <Button
+                aria-label="刷新话题"
+                className="table-icon-button"
+                onClick={onSyncTopics}
+                title="刷新话题"
+                type="button"
+                variant="ghost"
+              >
+                ↻
+              </Button>
+            ) : null}
             <Button
               aria-label={editing ? "收起编辑" : "编辑群组配置"}
               className={editing ? "table-icon-button active" : "table-icon-button"}

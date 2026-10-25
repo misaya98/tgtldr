@@ -62,6 +62,10 @@ func New(
 }
 
 func (r *Router) Handler() http.Handler {
+	return r.withMiddleware(r.routes())
+}
+
+func (r *Router) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/health", r.handleHealth)
@@ -88,6 +92,9 @@ func (r *Router) Handler() http.Handler {
 	mux.HandleFunc("HEAD /api/assets/{assetID}/content", r.handleAssetContent)
 	mux.HandleFunc("POST /api/assets/{assetID}/download", r.handleAssetDownload)
 	mux.HandleFunc("/api/chats/", r.handleChatByID)
+	mux.HandleFunc("POST /api/chats/{chatID}/topics/sync", r.handleSyncChatTopics)
+	mux.HandleFunc("PATCH /api/chats/{chatID}/topics/{topicID}", r.handleSaveChatTopic)
+	mux.HandleFunc("POST /api/chats/{chatID}/topics/{topicID}/backfill", r.handleBackfillChatTopic)
 	mux.HandleFunc("/api/history-backfills", r.handleStartHistoryBackfill)
 	mux.HandleFunc("/api/history-backfills/", r.handleHistoryBackfillByID)
 	mux.HandleFunc("/api/summaries", r.handleSummaries)
@@ -102,7 +109,7 @@ func (r *Router) Handler() http.Handler {
 	mux.HandleFunc("/api/daily-digests", r.handleDailyDigests)
 	mux.HandleFunc("/api/daily-digests/", r.handleDailyDigestByID)
 
-	return r.withMiddleware(mux)
+	return mux
 }
 
 func (r *Router) withMiddleware(next http.Handler) http.Handler {
@@ -623,6 +630,14 @@ func (r *Router) handleChats(w http.ResponseWriter, req *http.Request) {
 	}
 	if err := r.attachAvailableAccounts(req.Context(), chats); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if req.URL.Query().Get("includeTopics") == "true" {
+		if err := r.attachChatTopics(req, chats); err != nil {
+			httpx.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		httpx.JSON(w, http.StatusOK, newChatResponses(chats))
 		return
 	}
 	if err := r.attachChatAvatars(req.Context(), chats); err != nil {

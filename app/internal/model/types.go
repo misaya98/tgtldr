@@ -145,6 +145,55 @@ type TelegramAccountChat struct {
 	AccountStatus  string `json:"accountStatus"`
 }
 
+// TopicInheritance 标记话题设置中仍沿用父群配置的字段。
+type TopicInheritance struct {
+	SummaryTimeLocal bool `json:"summaryTimeLocal"`
+	SummaryTimezone  bool `json:"summaryTimezone"`
+	ModelOverride    bool `json:"modelOverride"`
+	DeliveryMode     bool `json:"deliveryMode"`
+	KeepBotMessages  bool `json:"keepBotMessages"`
+}
+
+// ChatTopic 表示 Telegram 论坛超级群中的一个论坛话题。
+type ChatTopic struct {
+	ID               int64     `json:"id"`
+	ChatID           int64     `json:"chatId"`
+	TelegramTopicID  int64     `json:"telegramTopicId"`
+	TopMessageID     int64     `json:"topMessageId"`
+	Title            string    `json:"title"`
+	IconColor        int       `json:"iconColor"`
+	IconEmojiID      int64     `json:"iconEmojiId"`
+	IsClosed         bool      `json:"isClosed"`
+	IsPinned         bool      `json:"isPinned"`
+	IsDeleted        bool      `json:"isDeleted"`
+	Enabled          bool      `json:"enabled"`
+	SummaryEnabled   bool      `json:"summaryEnabled"`
+	SummaryContext   string    `json:"summaryContext"`
+	SummaryPrompt    string    `json:"summaryPrompt"`
+	SummaryTimeLocal *string   `json:"-"`
+	SummaryTimezone  *string   `json:"-"`
+	ModelOverride    *string   `json:"-"`
+	DeliveryMode     *string   `json:"-"`
+	KeepBotMessages  *bool     `json:"-"`
+	FilteredSenders  []string  `json:"filteredSenders"`
+	FilteredKeywords []string  `json:"filteredKeywords"`
+	FirstSeenAt      time.Time `json:"firstSeenAt"`
+	LastSeenAt       time.Time `json:"lastSeenAt"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+// Inherited 返回各可继承字段当前是否仍跟随父群。
+func (topic ChatTopic) Inherited() TopicInheritance {
+	return TopicInheritance{
+		SummaryTimeLocal: topic.SummaryTimeLocal == nil,
+		SummaryTimezone:  topic.SummaryTimezone == nil,
+		ModelOverride:    topic.ModelOverride == nil,
+		DeliveryMode:     topic.DeliveryMode == nil,
+		KeepBotMessages:  topic.KeepBotMessages == nil,
+	}
+}
+
 type Chat struct {
 	ID                 int64                 `json:"id"`
 	TelegramChatID     int64                 `json:"telegramChatId"`
@@ -167,6 +216,8 @@ type Chat struct {
 	FilteredKeywords   []string              `json:"filteredKeywords"`
 	MessageActivity    []ChatMessageActivity `json:"messageActivity,omitempty"`
 	AvatarURL          string                `json:"avatarUrl,omitempty"`
+	IsForum            bool                  `json:"isForum"`
+	Topics             []ChatTopic           `json:"topics,omitempty"`
 	CreatedAt          time.Time             `json:"createdAt"`
 	UpdatedAt          time.Time             `json:"updatedAt"`
 }
@@ -192,6 +243,8 @@ type Message struct {
 	ReplyToMessageID  int       `json:"replyToMessageId"`
 	MessageTime       time.Time `json:"messageTime"`
 	RawJSON           string    `json:"rawJson"`
+	TelegramTopicID   int       `json:"telegramTopicId"`
+	TopicID           int64     `json:"topicId"`
 	CreatedAt         time.Time `json:"createdAt"`
 }
 

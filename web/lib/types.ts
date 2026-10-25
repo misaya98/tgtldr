@@ -182,6 +182,36 @@ export type GlobalChatMessageSearchResponse = Omit<ChatMessageSearchResponse, "i
   timezone: string;
 };
 
+export type ChatTopic = {
+  id: number;
+  chatId: number;
+  telegramTopicId: number;
+  title: string;
+  iconColor: number;
+  iconEmojiId: number;
+  isClosed: boolean;
+  isPinned: boolean;
+  isDeleted: boolean;
+  enabled: boolean;
+  summaryEnabled: boolean;
+  summaryContext: string;
+  summaryPrompt: string;
+  filteredSenders: string[];
+  filteredKeywords: string[];
+  summaryTimeLocal?: string | null;
+  summaryTimezone?: string | null;
+  modelOverride?: string | null;
+  deliveryMode?: string | null;
+  keepBotMessages?: boolean | null;
+  inherited: {
+    summaryTimeLocal: boolean;
+    summaryTimezone: boolean;
+    modelOverride: boolean;
+    deliveryMode: boolean;
+    keepBotMessages: boolean;
+  };
+};
+
 export type Chat = {
   id: number;
   telegramChatId: number;
@@ -202,6 +232,8 @@ export type Chat = {
   filteredKeywords: string[];
   messageActivity?: ChatMessageActivity[];
   avatarUrl?: string;
+  isForum?: boolean;
+  topics?: ChatTopic[];
 };
 
 export type HistoryBackfillTask = {

@@ -2,6 +2,14 @@
 
 [中文版](CHANGELOG.md)
 
+## 2026-10-25
+
+### Added
+
+- Detect Telegram forum topics and manage message collection and AI summary settings per topic.
+- Show forum topics as a parent/child tree on the Chats page, with topic refresh, quick toggles, and inheritance indicators.
+- Backfill confirmed historical topic membership from Telegram reply threads and filter chat history by topic.
+
 ## 2026-10-14
 
 ### Changed

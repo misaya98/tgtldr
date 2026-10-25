@@ -10,6 +10,7 @@ import {
   DailyDigest,
   DailyDigestListResponse,
   Chat,
+  ChatTopic,
   ChatMessageListResponse,
   ChatMessageSearchResponse,
   GlobalChatMessageSearchResponse,
@@ -182,8 +183,27 @@ export const api = {
     request<AuthStatus>(`/api/telegram/accounts/${accountId}`, {
       method: "DELETE",
     }),
-  listChats: async () =>
-    normalizeList(await request<Chat[] | null>("/api/chats")),
+  listChats: async (options?: { includeTopics?: boolean }) =>
+    normalizeList(
+      await request<Chat[] | null>(
+        `/api/chats${buildQuery({ includeTopics: options?.includeTopics ? "true" : undefined })}`,
+      ),
+    ),
+  syncChatTopics: (chatId: number) =>
+    request<ChatTopic[]>(`/api/chats/${chatId}/topics/sync`, { method: "POST" }),
+  saveChatTopic: (chatId: number, topic: ChatTopic) =>
+    request<ChatTopic>(`/api/chats/${chatId}/topics/${topic.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        enabled: topic.enabled,
+        summaryEnabled: topic.summaryEnabled,
+        summaryContext: topic.summaryContext,
+        summaryPrompt: topic.summaryPrompt,
+        modelOverride: topic.modelOverride ?? "",
+        filteredSenders: topic.filteredSenders,
+        filteredKeywords: topic.filteredKeywords,
+      }),
+    }),
   listChatMessages: (
     chatId: number,
     options?: {
@@ -191,6 +211,7 @@ export const api = {
       limit?: number;
       before?: string;
       focusMessageId?: number;
+      topicId?: number;
       filters?: boolean;
       signal?: AbortSignal;
     },
@@ -201,6 +222,7 @@ export const api = {
         limit: options?.limit,
         before: options?.before,
         focusMessageId: options?.focusMessageId,
+        topicId: options?.topicId,
         filters: options?.filters ? 1 : undefined,
       })}`,
       { signal: options?.signal },

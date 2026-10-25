@@ -19,7 +19,7 @@ func (r *ChatRepository) List(ctx context.Context) ([]model.Chat, error) {
 		select id, telegram_chat_id, telegram_access_hash, coalesce(collector_account_id, 0), title, username, chat_type,
 		       enabled, summary_enabled, summary_context, summary_prompt, summary_time_local, summary_timezone,
 		       delivery_mode, model_override, keep_bot_messages, filtered_senders, filtered_keywords,
-		       created_at, updated_at
+		       is_forum, created_at, updated_at
 		from chats
 		order by enabled desc, title asc
 	`)
@@ -50,6 +50,7 @@ func (r *ChatRepository) List(ctx context.Context) ([]model.Chat, error) {
 			&chat.KeepBotMessages,
 			&chat.FilteredSenders,
 			&chat.FilteredKeywords,
+			&chat.IsForum,
 			&chat.CreatedAt,
 			&chat.UpdatedAt,
 		)
@@ -82,13 +83,14 @@ func (r *ChatRepository) UpsertMany(ctx context.Context, chats []model.Chat) err
 			insert into chats (
 				telegram_chat_id, telegram_access_hash, title, username, chat_type,
 				enabled, summary_enabled, summary_context, summary_prompt, summary_time_local, summary_timezone, delivery_mode, model_override,
-				keep_bot_messages, filtered_senders, filtered_keywords
-			) values ($1, $2, $3, $4, $5, false, false, '', '', '09:00', 'Asia/Shanghai', 'dashboard', '', true, '{}', '{}')
+				keep_bot_messages, filtered_senders, filtered_keywords, is_forum
+			) values ($1, $2, $3, $4, $5, false, false, '', '', '09:00', 'Asia/Shanghai', 'dashboard', '', true, '{}', '{}', $6)
 			on conflict (telegram_chat_id) do update
 			set telegram_access_hash = excluded.telegram_access_hash,
 			    title = excluded.title,
 			    username = excluded.username,
 			    chat_type = excluded.chat_type,
+			    is_forum = excluded.is_forum,
 			    updated_at = now()
 		`,
 			chat.TelegramChatID,
@@ -96,6 +98,7 @@ func (r *ChatRepository) UpsertMany(ctx context.Context, chats []model.Chat) err
 			chat.Title,
 			chat.Username,
 			chat.ChatType,
+			chat.IsForum,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert chat %d: %w", chat.TelegramChatID, err)
@@ -127,7 +130,7 @@ func (r *ChatRepository) Save(ctx context.Context, chat model.Chat) (model.Chat,
 		returning id, telegram_chat_id, telegram_access_hash, coalesce(collector_account_id, 0), title, username, chat_type,
 		          enabled, summary_enabled, summary_context, summary_prompt, summary_time_local, summary_timezone,
 		          delivery_mode, model_override, keep_bot_messages, filtered_senders, filtered_keywords,
-		          created_at, updated_at
+		          is_forum, created_at, updated_at
 	`,
 		chat.Enabled,
 		chat.SummaryEnabled,
@@ -159,6 +162,7 @@ func (r *ChatRepository) Save(ctx context.Context, chat model.Chat) (model.Chat,
 		&saved.KeepBotMessages,
 		&saved.FilteredSenders,
 		&saved.FilteredKeywords,
+		&saved.IsForum,
 		&saved.CreatedAt,
 		&saved.UpdatedAt,
 	)
@@ -174,7 +178,7 @@ func (r *ChatRepository) GetByID(ctx context.Context, id int64) (model.Chat, err
 		select id, telegram_chat_id, telegram_access_hash, coalesce(collector_account_id, 0), title, username, chat_type,
 		       enabled, summary_enabled, summary_context, summary_prompt, summary_time_local, summary_timezone,
 		       delivery_mode, model_override, keep_bot_messages, filtered_senders, filtered_keywords,
-		       created_at, updated_at
+		       is_forum, created_at, updated_at
 		from chats
 		where id = $1
 	`, id).Scan(
@@ -196,6 +200,7 @@ func (r *ChatRepository) GetByID(ctx context.Context, id int64) (model.Chat, err
 		&chat.KeepBotMessages,
 		&chat.FilteredSenders,
 		&chat.FilteredKeywords,
+		&chat.IsForum,
 		&chat.CreatedAt,
 		&chat.UpdatedAt,
 	)
@@ -210,7 +215,7 @@ func (r *ChatRepository) ListSummaryEnabled(ctx context.Context) ([]model.Chat, 
 		select id, telegram_chat_id, telegram_access_hash, coalesce(collector_account_id, 0), title, username, chat_type,
 		       enabled, summary_enabled, summary_context, summary_prompt, summary_time_local, summary_timezone,
 		       delivery_mode, model_override, keep_bot_messages, filtered_senders, filtered_keywords,
-		       created_at, updated_at
+		       is_forum, created_at, updated_at
 		from chats
 		where summary_enabled = true
 		order by id asc
@@ -242,6 +247,7 @@ func (r *ChatRepository) ListSummaryEnabled(ctx context.Context) ([]model.Chat, 
 			&chat.KeepBotMessages,
 			&chat.FilteredSenders,
 			&chat.FilteredKeywords,
+			&chat.IsForum,
 			&chat.CreatedAt,
 			&chat.UpdatedAt,
 		)
@@ -259,7 +265,7 @@ func (r *ChatRepository) GetByTelegramID(ctx context.Context, telegramID int64) 
 		select id, telegram_chat_id, telegram_access_hash, coalesce(collector_account_id, 0), title, username, chat_type,
 		       enabled, summary_enabled, summary_context, summary_prompt, summary_time_local, summary_timezone,
 		       delivery_mode, model_override, keep_bot_messages, filtered_senders, filtered_keywords,
-		       created_at, updated_at
+		       is_forum, created_at, updated_at
 		from chats
 		where telegram_chat_id = $1
 	`, telegramID).Scan(
@@ -281,6 +287,7 @@ func (r *ChatRepository) GetByTelegramID(ctx context.Context, telegramID int64) 
 		&chat.KeepBotMessages,
 		&chat.FilteredSenders,
 		&chat.FilteredKeywords,
+		&chat.IsForum,
 		&chat.CreatedAt,
 		&chat.UpdatedAt,
 	)

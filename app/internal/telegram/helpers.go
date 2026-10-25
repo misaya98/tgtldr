@@ -39,6 +39,7 @@ func dialogToChat(elem dialogsquery.Elem) (model.Chat, bool) {
 			Title:          channel.Title,
 			Username:       channel.Username,
 			ChatType:       "supergroup",
+			IsForum:        channel.Forum,
 		}, true
 	default:
 		return model.Chat{}, false

@@ -86,7 +86,7 @@ func (r *MessageRepository) ListMediaAfter(ctx context.Context, accountID int64,
 		select m.id, m.chat_id, coalesce(m.sender_entity_id, 0), m.telegram_message_id,
 		       m.telegram_sender_id, m.sender_name, m.sender_username, m.sender_is_bot,
 		       m.text_content, m.caption, m.message_type, m.media_kind, m.reply_to_message_id,
-		       m.message_time, m.raw_json::text, m.created_at
+		       m.message_time, m.raw_json::text, m.created_at, m.topic_id
 		from messages m
 		join chats c on c.id = m.chat_id
 		where c.collector_account_id = $1 and m.id > $2 and m.message_type = 'media'
@@ -121,8 +121,8 @@ func (r *MessageRepository) Upsert(ctx context.Context, message model.Message) e
 		insert into messages (
 			chat_id, sender_entity_id, telegram_message_id, telegram_sender_id, sender_name, sender_username, sender_is_bot,
 			text_content, caption, message_type, media_kind, reply_to_message_id,
-			message_time, raw_json
-		) values ($1, nullif($2, 0), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
+			message_time, raw_json, topic_id
+		) values ($1, nullif($2, 0), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)
 		on conflict (chat_id, telegram_message_id) do update
 		set sender_entity_id = coalesce(excluded.sender_entity_id, messages.sender_entity_id),
 		    telegram_sender_id = excluded.telegram_sender_id,
@@ -135,7 +135,8 @@ func (r *MessageRepository) Upsert(ctx context.Context, message model.Message) e
 		    media_kind = excluded.media_kind,
 		    reply_to_message_id = excluded.reply_to_message_id,
 		    message_time = excluded.message_time,
-		    raw_json = excluded.raw_json
+		    raw_json = excluded.raw_json,
+		    topic_id = case when excluded.topic_id > 0 then excluded.topic_id else messages.topic_id end
 	`,
 		message.ChatID,
 		message.SenderEntityID,
@@ -151,6 +152,7 @@ func (r *MessageRepository) Upsert(ctx context.Context, message model.Message) e
 		message.ReplyToMessageID,
 		message.MessageTime,
 		message.RawJSON,
+		message.TopicID,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert message %d: %w", message.TelegramMessageID, err)
@@ -158,16 +160,18 @@ func (r *MessageRepository) Upsert(ctx context.Context, message model.Message) e
 	return nil
 }
 
-func (r *MessageRepository) ListForRange(ctx context.Context, chatID int64, start, end time.Time) ([]model.Message, error) {
+func (r *MessageRepository) ListForRange(ctx context.Context, chatID int64, start, end time.Time, topicIDs ...int64) ([]model.Message, error) {
+	topicID := firstTopicID(topicIDs)
 	rows, err := r.pool.Query(ctx, `
 		select id, chat_id, coalesce(sender_entity_id, 0), telegram_message_id, telegram_sender_id, sender_name,
 		       sender_username, sender_is_bot,
 		       text_content, caption, message_type, media_kind, reply_to_message_id,
-		       message_time, raw_json::text, created_at
+		       message_time, raw_json::text, created_at, topic_id
 		from messages
 		where chat_id = $1 and message_time >= $2 and message_time < $3
+		  and ($4 = 0 or topic_id = $4)
 		order by message_time asc, telegram_message_id asc
-	`, chatID, start, end)
+	`, chatID, start, end, topicID)
 	if err != nil {
 		return nil, fmt.Errorf("query messages: %w", err)
 	}
@@ -193,6 +197,7 @@ func (r *MessageRepository) ListForRange(ctx context.Context, chatID int64, star
 			&message.MessageTime,
 			&message.RawJSON,
 			&message.CreatedAt,
+			&message.TopicID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan message: %w", err)
@@ -210,17 +215,20 @@ func (r *MessageRepository) ListPageForRange(
 	before *MessageCursor,
 	limit int,
 	filter MessageDisplayFilter,
+	topicIDs ...int64,
 ) ([]model.Message, bool, error) {
+	topicID := firstTopicID(topicIDs)
 	query := `
 		select id, chat_id, coalesce(sender_entity_id, 0), telegram_message_id, telegram_sender_id, sender_name,
 		       sender_username, sender_is_bot,
 		       text_content, caption, message_type, media_kind, reply_to_message_id,
-		       message_time, raw_json::text, created_at
+		       message_time, raw_json::text, created_at, topic_id
 		from messages m
-		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3`
-	args := []any{chatID, start, end}
+		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3
+		  and ($4 = 0 or m.topic_id = $4)`
+	args := []any{chatID, start, end, topicID}
 	if before != nil {
-		query += ` and (m.message_time, m.telegram_message_id) < ($4, $5)`
+		query += ` and (m.message_time, m.telegram_message_id) < ($5, $6)`
 		args = append(args, before.MessageTime, before.TelegramMessageID)
 	}
 	filterSQL, args := appendMessageDisplayFilter("m", args, filter)
@@ -256,14 +264,17 @@ func (r *MessageRepository) LatestDateAtOrBefore(
 	timezone string,
 	date string,
 	filter MessageDisplayFilter,
+	topicIDs ...int64,
 ) (string, error) {
-	args := []any{chatID, timezone, date}
+	topicID := firstTopicID(topicIDs)
+	args := []any{chatID, timezone, date, topicID}
 	filterSQL, args := appendMessageDisplayFilter("m", args, filter)
 	var latest *time.Time
 	err := r.pool.QueryRow(ctx, `
 		select max((m.message_time at time zone $2)::date)
 		from messages m
-		where m.chat_id = $1 and (m.message_time at time zone $2)::date <= $3::date`+
+		where m.chat_id = $1 and (m.message_time at time zone $2)::date <= $3::date
+		  and ($4 = 0 or m.topic_id = $4)`+
 		filterSQL, args...).Scan(&latest)
 	if err != nil {
 		return "", fmt.Errorf("query latest message date: %w", err)
@@ -280,8 +291,10 @@ func (r *MessageRepository) AdjacentDates(
 	timezone string,
 	date string,
 	filter MessageDisplayFilter,
+	topicIDs ...int64,
 ) (string, string, error) {
-	args := []any{chatID, timezone, date}
+	topicID := firstTopicID(topicIDs)
+	args := []any{chatID, timezone, date, topicID}
 	filterSQL, args := appendMessageDisplayFilter("m", args, filter)
 	var previous *time.Time
 	var next *time.Time
@@ -292,7 +305,7 @@ func (r *MessageRepository) AdjacentDates(
 			min((m.message_time at time zone $2)::date)
 				filter (where (m.message_time at time zone $2)::date > $3::date)
 		from messages m
-		where m.chat_id = $1`+filterSQL, args...).Scan(&previous, &next)
+		where m.chat_id = $1 and ($4 = 0 or m.topic_id = $4)`+filterSQL, args...).Scan(&previous, &next)
 	if err != nil {
 		return "", "", fmt.Errorf("query adjacent message dates: %w", err)
 	}
@@ -306,14 +319,17 @@ func (r *MessageRepository) ActivityForRange(
 	days int,
 	timezone string,
 	filter MessageDisplayFilter,
+	topicIDs ...int64,
 ) ([]model.ChatMessageActivity, error) {
+	topicID := firstTopicID(topicIDs)
 	endLocal := startLocal.AddDate(0, 0, days)
-	args := []any{chatID, startLocal.UTC(), endLocal.UTC(), timezone}
+	args := []any{chatID, startLocal.UTC(), endLocal.UTC(), timezone, topicID}
 	filterSQL, args := appendMessageDisplayFilter("m", args, filter)
 	rows, err := r.pool.Query(ctx, `
 		select (m.message_time at time zone $4)::date::text, count(*)::int
 		from messages m
-		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3`+filterSQL+`
+		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3
+		  and ($5 = 0 or m.topic_id = $5)`+filterSQL+`
 		group by 1
 		order by 1
 	`, args...)
@@ -347,13 +363,25 @@ func (r *MessageRepository) CountForRange(
 	if len(filters) > 0 {
 		filter = filters[0]
 	}
-	args := []any{chatID, start, end}
+	return r.CountForRangeWithTopic(ctx, chatID, start, end, 0, filter)
+}
+
+func (r *MessageRepository) CountForRangeWithTopic(
+	ctx context.Context,
+	chatID int64,
+	start time.Time,
+	end time.Time,
+	topicID int64,
+	filter MessageDisplayFilter,
+) (int, error) {
+	args := []any{chatID, start, end, topicID}
 	filterSQL, args := appendMessageDisplayFilter("m", args, filter)
 	var count int
 	err := r.pool.QueryRow(ctx, `
 		select count(*)
 		from messages m
-		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3`+
+		where m.chat_id = $1 and m.message_time >= $2 and m.message_time < $3
+		  and ($4 = 0 or m.topic_id = $4)`+
 		filterSQL, args...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count messages: %w", err)
@@ -370,7 +398,7 @@ func (r *MessageRepository) LookupByTelegramIDs(ctx context.Context, chatID int6
 		select id, chat_id, coalesce(sender_entity_id, 0), telegram_message_id, telegram_sender_id, sender_name,
 		       sender_username, sender_is_bot,
 		       text_content, caption, message_type, media_kind, reply_to_message_id,
-		       message_time, raw_json::text, created_at
+		       message_time, raw_json::text, created_at, topic_id
 		from messages
 		where chat_id = $1 and telegram_message_id = any($2)
 	`, chatID, ids)
@@ -399,6 +427,7 @@ func (r *MessageRepository) LookupByTelegramIDs(ctx context.Context, chatID int6
 			&message.MessageTime,
 			&message.RawJSON,
 			&message.CreatedAt,
+			&message.TopicID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan lookup message: %w", err)
@@ -431,6 +460,7 @@ func scanMessage(scanner messageScanner) (model.Message, error) {
 		&message.MessageTime,
 		&message.RawJSON,
 		&message.CreatedAt,
+		&message.TopicID,
 	)
 	if err != nil {
 		return model.Message{}, fmt.Errorf("scan message: %w", err)
@@ -458,4 +488,11 @@ func formatOptionalDate(value *time.Time) string {
 		return ""
 	}
 	return value.Format("2006-01-02")
+}
+
+func firstTopicID(topicIDs []int64) int64 {
+	if len(topicIDs) == 0 {
+		return 0
+	}
+	return topicIDs[0]
 }

@@ -153,6 +153,16 @@ func (s *Service) SyncChats(ctx context.Context, accountIDs ...int64) error {
 		if err := s.store.AccountChats.Upsert(ctx, accountID, stored.ID, chat.TelegramAccess); err != nil {
 			return err
 		}
+		if !stored.IsForum {
+			continue
+		}
+		stored.TelegramAccess = chat.TelegramAccess
+		topics, syncErr := s.SyncChatTopics(ctx, stored)
+		if syncErr != nil {
+			log.Printf("sync forum topics for %s: %v", stored.Title, syncErr)
+			continue
+		}
+		_ = topics
 	}
 	return nil
 }
@@ -367,6 +377,15 @@ func (s *Service) storeIncomingMessage(ctx context.Context, accountID int64, ent
 
 	payload, _ := json.Marshal(msg)
 	senderID, senderName, senderUsername, senderIsBot := resolveSender(msg, entities, chat.Title)
+	telegramTopicID, _, _ := resolveMessageTopic(msg, chat.IsForum)
+	topicID := int64(0)
+	if chat.IsForum {
+		if resolved, resolveErr := s.store.Topics.ResolveInternalID(ctx, chat.ID, int64(telegramTopicID)); resolveErr == nil {
+			topicID = resolved
+		} else if !store.IsNotFound(resolveErr) {
+			return resolveErr
+		}
+	}
 	senderEntityID := int64(0)
 	if entity, ok := senderEntityFromUpdate(accountID, msg, entities); ok {
 		senderEntityID, err = s.upsertEntityAssets(ctx, entity)
@@ -389,6 +408,8 @@ func (s *Service) storeIncomingMessage(ctx context.Context, accountID int64, ent
 		ReplyToMessageID:  replyToID(msg),
 		MessageTime:       time.Unix(int64(msg.Date), 0).UTC(),
 		RawJSON:           string(payload),
+		TelegramTopicID:   telegramTopicID,
+		TopicID:           topicID,
 	}
 	if err := s.store.Messages.Upsert(ctx, item); err != nil {
 		return err

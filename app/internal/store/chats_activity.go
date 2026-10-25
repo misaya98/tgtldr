@@ -46,7 +46,7 @@ func (r *ChatRepository) ListWithMessageActivity(
 		select c.id, c.telegram_chat_id, c.telegram_access_hash, coalesce(c.collector_account_id, 0), c.title, c.username, c.chat_type,
 		       c.enabled, c.summary_enabled, c.summary_context, c.summary_prompt, c.summary_time_local, c.summary_timezone,
 		       c.delivery_mode, c.model_override, c.keep_bot_messages, c.filtered_senders, c.filtered_keywords,
-		       coalesce(a.message_activity, '[]'::jsonb),
+		       c.is_forum, coalesce(a.message_activity, '[]'::jsonb),
 		       c.created_at, c.updated_at
 		from chats c
 		left join activity_by_chat a on a.chat_id = c.id
@@ -94,6 +94,7 @@ func scanChatWithActivity(scanner chatActivityScanner, startLocal time.Time, day
 		&chat.KeepBotMessages,
 		&chat.FilteredSenders,
 		&chat.FilteredKeywords,
+		&chat.IsForum,
 		&rawActivity,
 		&chat.CreatedAt,
 		&chat.UpdatedAt,

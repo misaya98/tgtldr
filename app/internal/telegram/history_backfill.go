@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fr0der1c/tgtldr/app/internal/model"
+	"github.com/fr0der1c/tgtldr/app/internal/store"
 	"github.com/gotd/td/telegram/message/peer"
 	messagesquery "github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
@@ -188,6 +189,13 @@ func (s *Service) runHistoryBackfillAttempt(
 			if !ok {
 				continue
 			}
+			if chat.IsForum && item.TelegramTopicID != 0 {
+				if resolved, resolveErr := s.store.Topics.ResolveInternalID(ctx, chat.ID, int64(item.TelegramTopicID)); resolveErr == nil {
+					item.TopicID = resolved
+				} else if !store.IsNotFound(resolveErr) {
+					return resolveErr
+				}
+			}
 			msg := elem.Msg.(*tg.Message)
 			if entity, ok := senderEntityFromHistory(chat.CollectorAccountID, msg, elem.Entities); ok {
 				entityID, err := s.upsertEntityAssets(ctx, entity)
@@ -310,6 +318,7 @@ func historyElemToMessage(chat model.Chat, elem messagesquery.Elem) (model.Messa
 
 	payload, _ := json.Marshal(msg)
 	senderID, senderName, senderUsername, senderIsBot := resolveSenderFromPeerEntities(msg, elem.Entities, chat.Title)
+	telegramTopicID, _, _ := resolveMessageTopic(msg, chat.IsForum)
 	return model.Message{
 		ChatID:            chat.ID,
 		TelegramMessageID: msg.ID,
@@ -324,6 +333,7 @@ func historyElemToMessage(chat model.Chat, elem messagesquery.Elem) (model.Messa
 		ReplyToMessageID:  replyToID(msg),
 		MessageTime:       time.Unix(int64(msg.Date), 0).UTC(),
 		RawJSON:           string(payload),
+		TelegramTopicID:   telegramTopicID,
 	}, true
 }
 

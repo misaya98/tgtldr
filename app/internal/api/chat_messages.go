@@ -117,7 +117,22 @@ func (r *Router) handleChatMessages(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	filter := chatMessageDisplayFilter(chat, filtersApplied)
-	date, start, end, err := r.resolveChatMessageDate(req, chatID, timezone, filter)
+	topicID, err := parsePositiveInt64(req.URL.Query().Get("topicId"), "topicId")
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if topicID > 0 {
+		if _, err := r.store.Topics.GetByID(req.Context(), chatID, topicID); err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, pgx.ErrNoRows) {
+				status = http.StatusNotFound
+			}
+			httpx.Error(w, status, err.Error())
+			return
+		}
+	}
+	date, start, end, err := r.resolveChatMessageDate(req, chatID, timezone, filter, topicID)
 	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -138,7 +153,7 @@ func (r *Router) handleChatMessages(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	messages, hasMore, err := r.listChatMessageWindow(
-		req, chatID, start, end, cursor, limit, focusMessageID, filter,
+		req, chatID, start, end, cursor, limit, focusMessageID, filter, topicID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -149,7 +164,7 @@ func (r *Router) handleChatMessages(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	response, err := r.buildChatMessageResponse(
-		req, chat, date, timezone, start, end, startActivity, messages, hasMore, filter,
+		req, chat, date, timezone, start, end, startActivity, messages, hasMore, filter, topicID,
 	)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, err.Error())
@@ -168,15 +183,16 @@ func (r *Router) listChatMessageWindow(
 	limit int,
 	focusMessageID int64,
 	filter store.MessageDisplayFilter,
+	topicID int64,
 ) ([]model.Message, bool, error) {
 	if focusMessageID > 0 {
 		return r.store.Messages.ListWindowAround(
 			req.Context(), chatID, start, end, focusMessageID,
 			focusedMessageContext, focusedMessageContext,
-			filter,
+			filter, topicID,
 		)
 	}
-	return r.store.Messages.ListPageForRange(req.Context(), chatID, start, end, cursor, limit, filter)
+	return r.store.Messages.ListPageForRange(req.Context(), chatID, start, end, cursor, limit, filter, topicID)
 }
 
 func (r *Router) resolveChatMessageDate(
@@ -184,6 +200,7 @@ func (r *Router) resolveChatMessageDate(
 	chatID int64,
 	timezone string,
 	filter store.MessageDisplayFilter,
+	topicID int64,
 ) (string, time.Time, time.Time, error) {
 	location, err := time.LoadLocation(timezone)
 	if err != nil {
@@ -193,7 +210,7 @@ func (r *Router) resolveChatMessageDate(
 	if date == "" {
 		date = time.Now().In(location).Format("2006-01-02")
 		latest, err := r.store.Messages.LatestDateAtOrBefore(
-			req.Context(), chatID, timezone, date, filter,
+			req.Context(), chatID, timezone, date, filter, topicID,
 		)
 		if err != nil {
 			return "", time.Time{}, time.Time{}, err
@@ -225,19 +242,20 @@ func (r *Router) buildChatMessageResponse(
 	messages []model.Message,
 	hasMore bool,
 	filter store.MessageDisplayFilter,
+	topicID int64,
 ) (chatMessageResponse, error) {
-	total, err := r.store.Messages.CountForRange(req.Context(), chat.ID, start, end, filter)
+	total, err := r.store.Messages.CountForRangeWithTopic(req.Context(), chat.ID, start, end, topicID, filter)
 	if err != nil {
 		return chatMessageResponse{}, err
 	}
 	activity, err := r.store.Messages.ActivityForRange(
-		req.Context(), chat.ID, activityStart, chatMessageActivityDays, timezone, filter,
+		req.Context(), chat.ID, activityStart, chatMessageActivityDays, timezone, filter, topicID,
 	)
 	if err != nil {
 		return chatMessageResponse{}, err
 	}
 	previousDate, nextDate, err := r.store.Messages.AdjacentDates(
-		req.Context(), chat.ID, timezone, date, filter,
+		req.Context(), chat.ID, timezone, date, filter, topicID,
 	)
 	if err != nil {
 		return chatMessageResponse{}, err

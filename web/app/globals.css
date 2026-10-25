@@ -3364,3 +3364,125 @@ select {
     display: none;
   }
 }
+
+/* Forum topic tree rows */
+.topic-disclosure {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(28, 25, 23, 0.12);
+  border-radius: 9px;
+  background: rgba(255, 252, 247, 0.9);
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  place-items: center;
+  cursor: pointer;
+}
+
+.topic-disclosure:hover {
+  border-color: rgba(185, 137, 59, 0.35);
+  color: var(--accent-strong);
+}
+
+.topic-disclosure:focus-visible {
+  outline: 2px solid rgba(185, 137, 59, 0.35);
+  outline-offset: 2px;
+}
+
+.chat-identity:has(.topic-disclosure) {
+  grid-template-columns: 28px 40px minmax(0, 1fr);
+}
+
+.topic-row {
+  background:
+    linear-gradient(90deg, rgba(185, 137, 59, 0.045), transparent 38%),
+    rgba(255, 253, 249, 0.8);
+}
+
+.topic-row td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.topic-identity {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding-left: 18px;
+}
+
+.topic-branch {
+  color: rgba(28, 25, 23, 0.28);
+  font-size: 1.1rem;
+  line-height: 1.45;
+}
+
+.topic-identity strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.topic-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid rgba(185, 137, 59, 0.2);
+  border-radius: 999px;
+  background: rgba(185, 137, 59, 0.09);
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.topic-chip.danger {
+  border-color: rgba(162, 62, 62, 0.2);
+  background: rgba(162, 62, 62, 0.08);
+  color: #923c3c;
+}
+
+.status-toggle {
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid rgba(28, 25, 23, 0.12);
+  border-radius: 999px;
+  background: rgba(28, 25, 23, 0.035);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.status-toggle.on {
+  border-color: rgba(47, 143, 83, 0.2);
+  background: rgba(47, 143, 83, 0.1);
+  color: #256d44;
+}
+
+.status-toggle:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.status-toggle:focus-visible {
+  outline: 2px solid rgba(185, 137, 59, 0.35);
+  outline-offset: 2px;
+}
+
+.topic-inherit-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 640px) {
+  .chat-identity:has(.topic-disclosure) {
+    grid-template-columns: 28px 36px minmax(0, 1fr);
+  }
+
+  .topic-identity {
+    padding-left: 8px;
+  }
+}
