@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TGTLDR · 智能探针与问答工作台 (Perplexity Copilot)</title>
+  <style>
+    :root {
+      --bg: #090a0f;
+      --surface: #12141c;
+      --card: #181b26;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --brand: #38bdf8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Minimal Floating Top Bar */
+    .topbar {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(18, 20, 28, 0.8);
+      backdrop-filter: blur(12px);
+    }
+    .brand {
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: -0.02em;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-tag {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: var(--accent-glow);
+      color: #818cf8;
+      font-weight: 600;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 48px 24px 80px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* Hero & AI Search Box */
+    .hero-section {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .hero-title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #fff 40%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .search-container {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 16px 20px;
+      box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .search-input-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .search-input-row input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-size: 1.05rem;
+      color: #fff;
+    }
+    .search-btn {
+      padding: 8px 18px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .preset-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .prompt-chip {
+      font-size: 0.78rem;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 140ms;
+    }
+    .prompt-chip:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Live Synthesized Intelligence Card */
+    .answer-card {
+      background: var(--surface);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .answer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .answer-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+    }
+    .answer-sources {
+      display: flex;
+      gap: 8px;
+    }
+    .source-badge {
+      font-size: 0.74rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .answer-body {
+      font-size: 0.95rem;
+      line-height: 1.7;
+      color: #cbd5e1;
+    }
+    .answer-body p { margin-bottom: 12px; }
+
+    .cite {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(99, 102, 241, 0.25);
+      color: #a5b4fc;
+      font-size: 0.7rem;
+      font-weight: 700;
+      margin: 0 3px;
+      cursor: pointer;
+      vertical-align: middle;
+    }
+
+    /* Evidence Flyout Box */
+    .inline-evidence-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 0.85rem;
+    }
+    .evidence-quote {
+      border-left: 3px solid var(--accent);
+      padding-left: 10px;
+      color: #e2e8f0;
+      font-style: italic;
+    }
+    .evidence-meta {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    /* Auto Topics Grid */
+    .topics-grid-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .topics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .topic-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      cursor: pointer;
+      transition: all 140ms;
+    }
+    .topic-card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+    .topic-card-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .topic-card-title {
+      font-size: 0.96rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #fff;
+    }
+    .topic-card-snippet {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span>TGTLDR</span>
+      <span class="brand-tag">INTELLIGENCE COPILOT</span>
+    </div>
+    <div style="font-size:0.85rem; color:var(--text-muted);">
+      <span>已聚合 14 个群聊 · 5,120 条今日记录</span>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero-section">
+      <h1 class="hero-title">今天你想了解群里的什么？</h1>
+      <div class="search-container">
+        <div class="search-input-row">
+          <span style="font-size:1.2rem;">✨</span>
+          <input type="text" value="今天群里有哪些关于生产事故或内存泄漏的讨论？" />
+          <button class="search-btn">深度提炼</button>
+        </div>
+        <div class="preset-prompts">
+          <span class="prompt-chip">🔥 今日事故与Bug复盘</span>
+          <span class="prompt-chip">🚀 DeepSeek 与前沿模型新动态</span>
+          <span class="prompt-chip">💡 Go / Rust 版本演进</span>
+          <span class="prompt-chip">🤝 有人提到合作或招人吗？</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Synthesized Intelligence Answer -->
+    <article class="answer-card">
+      <div class="answer-header">
+        <h2 class="answer-title"><span>🤖</span> AI 综合情报简报</h2>
+        <div class="answer-sources">
+          <span class="source-badge">🦀 Rust 中文社区 (16条引用)</span>
+          <span class="source-badge">🐹 Go 核心生态 (4条引用)</span>
+        </div>
+      </div>
+
+      <div class="answer-body">
+        <p>
+          今天在 <strong>Rust 中文技术社区</strong> 发生了较严重的线上内存暴涨讨论：某高并发网关服务连续运行 72 小时后发生 OOM，内存飙升至 2.4GB，但 CPU 使用率始终保持低位<span class="cite">1</span>。
+        </p>
+        <p>
+          经多位群友使用 <code>tokio-console</code> 快照采样，最终确认原因为内部打点模块误用了 <code>unbounded_channel()</code>，因下游网络抖动缺乏背压，导致堆积超过 40 万个未释放任务<span class="cite">2</span>。该团队已于 14:35 全面切换为容量 2048 的有界 channel，内存已平稳回落至 130MB<span class="cite">3</span>。
+        </p>
+      </div>
+
+      <div class="inline-evidence-box">
+        <div class="evidence-meta">
+          <span>引用来源 [3] · 张三 (@zhangsan) · 14:35</span>
+          <span style="color:#38bdf8; cursor:pointer;">在新窗口查看原始消息流 →</span>
+        </div>
+        <div class="evidence-quote">
+          “卧槽！挂 console 抓了一下，真的是内部上报指标用了一个 mpsc::unbounded_channel()！改成了 bounded(2048) 之后内存瞬间平稳回落到 130MB 了，感谢各位大佬拯救！🙏”
+        </div>
+      </div>
+    </article>
+
+    <!-- Dynamic Daily Topics -->
+    <div>
+      <div class="topics-grid-title" style="margin-bottom:14px;">
+        <span>⚡ 今日预提炼群聊专栏 (11月03日)</span>
+      </div>
+      <div class="topics-grid">
+        <div class="topic-card">
+          <div class="topic-card-top">
+            <span>AI 原生应用研讨群</span>
+            <span>16:40 · 3.8k 消息</span>
+          </div>
+          <div class="topic-card-title">DeepSeek 新多模态架构推理成本实测降 65%</div>
+          <div class="topic-card-snippet">评测追平顶尖水平，开发者分享在 Cursor 与 Claude Code 中全自动生成单元测试的提示词模板...</div>
+        </div>
+        <div class="topic-card">
+          <div class="topic-card-top">
+            <span>Web3 · #技术架构</span>
+            <span>14:15 · 940 消息</span>
+          </div>
+          <div class="topic-card-title">Layer2 验证者节点同步延迟解决方案</div>
+          <div class="topic-card-snippet">提出基于 P2P 分片传播的改进机制，同时深度对比了三大主流 DA 层的验证开销基准...</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

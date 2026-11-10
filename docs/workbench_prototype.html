@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TGTLDR 3.0 · 智能情报与证据对照工作台</title>
+  <style>
+    :root {
+      --bg: #090a0b;
+      --sidebar: #101214;
+      --feed: #131619;
+      --reader: #161a1e;
+      --evidence: #121417;
+      --card: #1c2025;
+      --card-hover: #22272e;
+      --card-active: #262c34;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-subtle: rgba(255, 255, 255, 0.04);
+      --text: #f4f4f5;
+      --text-muted: #8b949e;
+      --accent: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.15);
+      --accent-border: rgba(245, 158, 11, 0.4);
+      --good: #10b981;
+      --good-bg: rgba(16, 185, 129, 0.12);
+      --tag-bg: rgba(255, 255, 255, 0.06);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Top Bar / Global Header */
+    .app-header {
+      height: 48px;
+      background: var(--sidebar);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-badge {
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+    }
+
+    .header-center {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .header-hotkeys {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .kbd {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: #e4e4e7;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: #a1a1aa;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--good);
+      box-shadow: 0 0 8px var(--good);
+    }
+
+    /* Main Workspace 4-Column Layout */
+    .workbench {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Column 1: Navigation (~220px) */
+    .col-nav {
+      width: 220px;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .nav-section {
+      padding: 14px 10px 6px 10px;
+    }
+
+    .nav-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #71717a;
+      padding: 0 8px 6px 8px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-size: 0.84rem;
+      color: #d4d4d8;
+      cursor: pointer;
+      transition: all 120ms ease;
+      margin-bottom: 2px;
+    }
+
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+
+    .nav-item.active {
+      background: var(--accent-glow);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .nav-icon-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-pill {
+      font-size: 0.7rem;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #a1a1aa;
+    }
+
+    .nav-item.active .nav-pill {
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+    }
+
+    .channel-tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 10px;
+    }
+
+    .channel-group-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #71717a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 6px 4px 6px;
+    }
+
+    .channel-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px 6px 16px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: #a1a1aa;
+      cursor: pointer;
+    }
+
+    .channel-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: #fff;
+    }
+
+    .channel-item.active {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .topic-indent {
+      padding-left: 28px;
+      font-size: 0.78rem;
+    }
+
+    .nav-footer {
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ambient-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #d97706;
+      background: rgba(217, 119, 6, 0.12);
+      border: 1px solid rgba(217, 119, 6, 0.25);
+      padding: 4px 10px;
+      border-radius: 20px;
+      cursor: pointer;
+    }
+
+    /* Column 2: Feed Pane (~340px) */
+    .col-feed {
+      width: 340px;
+      background: var(--feed);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .feed-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      gap: 8px;
+    }
+
+    .search-box input {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 0.82rem;
+      outline: none;
+      width: 100%;
+    }
+
+    .filter-chips {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .filter-chips::-webkit-scrollbar {
+      display: none;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+    }
+
+    .chip {
+      font-size: 0.74rem;
+      padding: 3px 9px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .chip.active {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .feed-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .feed-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: all 140ms ease;
+      position: relative;
+    }
+
+    .feed-card:hover {
+      background: var(--card-hover);
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .feed-card.active {
+      background: var(--card-active);
+      border-color: var(--accent-border);
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.08);
+    }
+
+    .feed-card.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: var(--accent);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .card-title {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-meta {
+      font-size: 0.72rem;
+      color: #71717a;
+      font-family: var(--mono);
+    }
+
+    .card-bullets {
+      font-size: 0.78rem;
+      color: #a1a1aa;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-bottom: 8px;
+    }
+
+    .card-bullets li {
+      list-style: none;
+      position: relative;
+      padding-left: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-bullets li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+    }
+
+    .card-tags {
+      display: flex;
+      gap: 6px;
+    }
+
+    .tag {
+      font-size: 0.7rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--tag-bg);
+      color: #a1a1aa;
+    }
+
+    /* Column 3: Reader Stage (Flexible) */
+    .col-reader {
+      flex: 1;
+      background: var(--reader);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 440px;
+    }
+
+    .reader-toolbar {
+      height: 48px;
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      background: rgba(22, 26, 30, 0.8);
+      backdrop-filter: blur(8px);
+    }
+
+    .breadcrumbs {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 0.8rem;
+      color: #71717a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .breadcrumbs strong {
+      color: #f4f4f5;
+    }
+
+    .reader-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 11px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+      color: #e4e4e7;
+      cursor: pointer;
+      transition: all 120ms ease;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-toggle-split {
+      background: var(--accent-glow);
+      color: var(--accent);
+      border-color: var(--accent-border);
+      font-weight: 600;
+    }
+
+    .reader-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 40px;
+    }
+
+    .reader-header {
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .reader-headline {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+
+    .reader-meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.78rem;
+      color: #71717a;
+      font-family: var(--mono);
+    }
+
+    .reader-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .article-section {
+      margin-bottom: 28px;
+    }
+
+    .section-title {
+      font-size: 1.12rem;
+      font-weight: 600;
+      color: #f59e0b;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-body {
+      font-size: 0.92rem;
+      line-height: 1.7;
+      color: #d4d4d8;
+    }
+
+    .section-body p {
+      margin-bottom: 10px;
+    }
+
+    .evidence-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fbbf24;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 140ms ease;
+    }
+
+    .evidence-badge:hover {
+      background: rgba(245, 158, 11, 0.22);
+      transform: translateX(2px);
+    }
+
+    /* Column 4: Side-by-Side Evidence Pane (~380px) */
+    .col-evidence {
+      width: 380px;
+      background: var(--evidence);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      animation: slideIn 200ms ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .evidence-header {
+      height: 48px;
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      background: rgba(18, 20, 23, 0.9);
+    }
+
+    .evidence-title {
+      font-size: 0.84rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #f4f4f5;
+    }
+
+    .evidence-sub {
+      font-size: 0.72rem;
+      color: #71717a;
+      font-family: var(--mono);
+    }
+
+    .evidence-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .msg-bubble {
+      display: flex;
+      gap: 10px;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .msg-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #27272a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.75rem;
+      color: #a1a1aa;
+      flex-shrink: 0;
+    }
+
+    .msg-content {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+
+    .msg-content.highlight {
+      border-color: rgba(245, 158, 11, 0.5);
+      background: rgba(245, 158, 11, 0.07);
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.1);
+    }
+
+    .msg-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .msg-sender {
+      font-weight: 600;
+      color: #38bdf8;
+    }
+
+    .msg-time {
+      font-size: 0.7rem;
+      color: #71717a;
+      font-family: var(--mono);
+    }
+
+    .msg-reply {
+      border-left: 2px solid #52525b;
+      padding-left: 6px;
+      font-size: 0.74rem;
+      color: #a1a1aa;
+      margin-bottom: 6px;
+    }
+
+    .evidence-footer {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .evidence-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Global Bar -->
+  <header class="app-header">
+    <div class="brand-group">
+      <div class="brand-logo">
+        <span>TGTLDR</span>
+        <span class="brand-badge">3.0 INTELLIGENCE WORKBENCH</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <span>快捷键导航:</span>
+      <div class="header-hotkeys">
+        <span class="kbd">J</span> 下一条
+        <span class="kbd">K</span> 上一条
+        <span class="kbd">/</span> 搜索
+        <span class="kbd">E</span> 证据对照
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-indicator">
+        <span class="dot"></span>
+        <span>14 个群实时监听落库中</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main 4-Column Workbench -->
+  <div class="workbench">
+
+    <!-- Column 1: Navigation -->
+    <aside class="col-nav">
+      <div class="nav-section">
+        <div class="nav-label">信息聚合</div>
+        <div class="nav-item active">
+          <div class="nav-icon-label">
+            <span>📰</span>
+            <span>今日总览</span>
+          </div>
+          <span class="nav-pill">全天已出</span>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon-label">
+            <span>⚡</span>
+            <span>阶段快速回顾</span>
+          </div>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon-label">
+            <span>⭐️</span>
+            <span>高优关注群</span>
+          </div>
+          <span class="nav-pill">5</span>
+        </div>
+      </div>
+
+      <div class="channel-tree">
+        <div class="channel-group-title">📁 核心技术研发 (3)</div>
+        <div class="channel-item active">
+          <span>🦀 Rust 中文技术社区</span>
+          <span class="card-meta">1.2k</span>
+        </div>
+        <div class="channel-item">
+          <span>🐹 Go 语言核心生态</span>
+          <span class="card-meta">840</span>
+        </div>
+        <div class="channel-item">
+          <span>🐧 Linux 系统底层工程</span>
+          <span class="card-meta">390</span>
+        </div>
+
+        <div class="channel-group-title">📁 AI 与大模型探索 (4)</div>
+        <div class="channel-item">
+          <span>🤖 AI 原生应用研讨群</span>
+          <span class="card-meta">3.8k</span>
+        </div>
+        <div class="channel-item">
+          <span>🧠 开源大模型部署实战</span>
+          <span class="card-meta">1.1k</span>
+        </div>
+
+        <div class="channel-group-title">📁 论坛超级群 (Topics)</div>
+        <div class="channel-item">
+          <span>🌐 Web3 全球技术社</span>
+        </div>
+        <div class="channel-item topic-indent">
+          <span># 技术架构与扩容</span>
+        </div>
+        <div class="channel-item topic-indent">
+          <span># 宏观市场与链上分析</span>
+        </div>
+      </div>
+
+      <div class="nav-footer">
+        <div class="ambient-pill" title="查看后台任务执行明细">
+          <span>⚡ 1 个回补进行中</span>
+        </div>
+        <span style="font-size:0.8rem; cursor:pointer;">⚙️ 设置</span>
+      </div>
+    </aside>
+
+    <!-- Column 2: Feed Pane -->
+    <section class="col-feed">
+      <div class="feed-header">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="搜索摘要或按 ⌘K ..." />
+        </div>
+        <div class="filter-chips">
+          <span class="chip active">今日全部 (8)</span>
+          <span class="chip">高信息密度</span>
+          <span class="chip">有重大Bug/突破</span>
+          <span class="chip">未读 (3)</span>
+        </div>
+      </div>
+
+      <div class="feed-list">
+        <!-- Feed Card 1 (Active) -->
+        <article class="feed-card active">
+          <div class="card-head">
+            <span class="card-title">Rust 中文技术社区</span>
+            <span class="card-meta">18:00 · 1,248条</span>
+          </div>
+          <ul class="card-bullets">
+            <li>Tokio 异步 Runtime 无界 channel 导致内存泄漏排查</li>
+            <li>v1.82 稳定版关于裸指针 addr_of! 宏的新特性讨论</li>
+            <li>网关高并发场景下 Arc 引用计数性能避坑技巧</li>
+          </ul>
+          <div class="card-tags">
+            <span class="tag">#Tokio</span>
+            <span class="tag">#内存泄漏</span>
+            <span class="tag">#v1.82</span>
+          </div>
+        </article>
+
+        <!-- Feed Card 2 -->
+        <article class="feed-card">
+          <div class="card-head">
+            <span class="card-title">AI 原生应用研讨群</span>
+            <span class="card-meta">16:40 · 3,892条</span>
+          </div>
+          <ul class="card-bullets">
+            <li>DeepSeek 新发布模型架构实测推理成本降低 65%</li>
+            <li>Cursor 配合 Claude 3.5 Sonnet 自动化单元测试最佳实践</li>
+            <li>讨论私有化部署量化模型的显存占用估算工具</li>
+          </ul>
+          <div class="card-tags">
+            <span class="tag">#DeepSeek</span>
+            <span class="tag">#Cursor</span>
+            <span class="tag">#推理加速</span>
+          </div>
+        </article>
+
+        <!-- Feed Card 3 -->
+        <article class="feed-card">
+          <div class="card-head">
+            <span class="card-title">Web3 · #技术架构</span>
+            <span class="card-meta">14:15 · 940条</span>
+          </div>
+          <ul class="card-bullets">
+            <li>Layer2 验证者节点状态同步延迟问题排查</li>
+            <li>基于 Zero-Knowledge 的身份凭据协议架构选型</li>
+          </ul>
+          <div class="card-tags">
+            <span class="tag">#ZK</span>
+            <span class="tag">#Layer2</span>
+          </div>
+        </article>
+
+        <!-- Feed Card 4 -->
+        <article class="feed-card">
+          <div class="card-head">
+            <span class="card-title">Go 语言核心生态</span>
+            <span class="card-meta">12:00 · 840条</span>
+          </div>
+          <ul class="card-bullets">
+            <li>Go 1.25 编译器内联优化机制改动解析</li>
+            <li>sync.Pool 在大对象复用时的 GC 行为分析</li>
+          </ul>
+          <div class="card-tags">
+            <span class="tag">#GC优化</span>
+            <span class="tag">#编译器</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Column 3: Reader Stage -->
+    <main class="col-reader">
+      <div class="reader-toolbar">
+        <div class="breadcrumbs">
+          <span>信源</span>
+          <span>/</span>
+          <span>核心技术研发</span>
+          <span>/</span>
+          <strong>Rust 中文技术社区</strong>
+          <span>· 2026-11-02</span>
+        </div>
+        <div class="reader-actions">
+          <button class="btn">📋 复制 MD</button>
+          <button class="btn">📥 导出 .md</button>
+          <button class="btn">✈️ 推送至 Bot</button>
+          <button class="btn btn-toggle-split" id="toggleEvidenceBtn">⚡ 同屏证据链 (已开启)</button>
+        </div>
+      </div>
+
+      <div class="reader-scroll">
+        <header class="reader-header">
+          <h1 class="reader-headline">Rust 中文技术社区 · 每日精华简报</h1>
+          <div class="reader-meta-bar">
+            <span class="reader-meta-item">📊 1,248 条原始消息</span>
+            <span>•</span>
+            <span class="reader-meta-item">🧩 3 个切片分块 (Chunk)</span>
+            <span>•</span>
+            <span class="reader-meta-item">🤖 模型: deepseek-chat</span>
+            <span>•</span>
+            <span class="reader-meta-item">⏱️ 生成耗时: 4.2s</span>
+            <span>•</span>
+            <span class="reader-meta-item">📉 压缩比: 88.6%</span>
+          </div>
+        </header>
+
+        <!-- Section 1 -->
+        <section class="article-section">
+          <h2 class="section-title">1. Tokio 异步运行时无界 Channel 导致内存泄漏排查与避坑</h2>
+          <div class="section-body">
+            <p>
+              今日讨论焦点源于群友反馈：线上高并发长连接网关在连续运行 72 小时后发生 OOM，内存从平稳期的 120MB 一路膨胀至 2.4GB，但 CPU 负载始终保持在 15% 以下。
+            </p>
+            <p>
+              <strong>排查过程与根因：</strong>多位资深群友协同使用 <code>tokio-console</code> 对线上 Task 进行快照采样，最终定位到内部日志与遥测打点模块采用了 <code>tokio::sync::mpsc::unbounded_channel()</code>。在下游出现突发延迟时，由于缺乏 Backpressure（背压保护），生产端无节制推入，导致堆积的未处理 Future 积压超过 40 万个。
+            </p>
+            <p>
+              <strong>最终解决方案：</strong>全面废弃 unbounded channel，改用固定容量 <code>channel(2048)</code>，并在发送失败或满载时触发显式采样降级。修复后内存占用已回落至 135MB 并持续平稳。
+            </p>
+            <div class="evidence-badge" onclick="highlightEvidence('ev1')">
+              <span>🔍 查验对应 Telegram 原始对话 (14:22 - 14:38 · 16条消息)</span>
+              <span>→</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 2 -->
+        <section class="article-section">
+          <h2 class="section-title">2. Rust 官方发布 v1.82.0 稳定版讨论热点</h2>
+          <div class="section-body">
+            <p>
+              官方稳定版更新引发广泛探讨。大家最关注的新增特性是 <code>addr_of! / addr_of_mut!</code> 对裸指针解引用的严格校验机制，以及在 FFI 与嵌入式领域无需通过引用即可创建指针的巨大安全性优势。
+            </p>
+            <p>
+              群友分享了老代码升级后遇到的部分由于内联展开引起的编译期 warning 修复方案，普遍认为该版本为近年裸指针安全性最扎实的提升之一。
+            </p>
+            <div class="evidence-badge" onclick="highlightEvidence('ev2')">
+              <span>🔍 查验对应 Telegram 原始对话 (16:05 - 16:20 · 9条消息)</span>
+              <span>→</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 3 -->
+        <section class="article-section">
+          <h2 class="section-title">3. 高并发场景下 Arc 引用计数的 Cache Line 伪共享问题</h2>
+          <div class="section-body">
+            <p>
+              群内深入探讨了多核 CPU 上过度频繁克隆 <code>Arc</code> 所带来的跨核原子操作总线锁竞争（False Sharing）。建议在只读场景优先使用借用，或采用分片本地缓存策略。
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Column 4: Side-by-Side Evidence Stream -->
+    <aside class="col-evidence" id="evidenceCol">
+      <div class="evidence-header">
+        <div>
+          <div class="evidence-title">⚡ 原始会话证据链</div>
+          <div class="evidence-sub">定位至: Tokio 内存泄漏 (14:22 - 14:38)</div>
+        </div>
+        <button class="btn" onclick="toggleEvidence()" style="padding: 2px 7px; border:none;">✕</button>
+      </div>
+
+      <div class="evidence-messages">
+        <!-- Msg 1 -->
+        <div class="msg-bubble">
+          <div class="msg-avatar">张</div>
+          <div class="msg-content">
+            <div class="msg-meta">
+              <span class="msg-sender">张三 (@zhangsan)</span>
+              <span class="msg-time">14:22</span>
+            </div>
+            <div>有人遇到过 tokio 任务堆积导致内存不释放的情况吗？线上网关跑了3天内存直接翻倍到 2.4GB 了，但是 CPU 并没有高占用，也没有 panic 报错。</div>
+          </div>
+        </div>
+
+        <!-- Msg 2 -->
+        <div class="msg-bubble">
+          <div class="msg-avatar">李</div>
+          <div class="msg-content">
+            <div class="msg-meta">
+              <span class="msg-sender">李四 (@lisi_dev)</span>
+              <span class="msg-time">14:25</span>
+            </div>
+            <div class="msg-reply">回复 @zhangsan: 有人遇到过 tokio 任务堆积...</div>
+            <div>看看是不是在 <code>select!</code> 里持有了一个永远不会完成的 future，或者循环闭包里不断 clone 了 <code>Arc&lt;Mutex&lt;...&gt;&gt;</code> 形成环。</div>
+          </div>
+        </div>
+
+        <!-- Msg 3 -->
+        <div class="msg-bubble">
+          <div class="msg-avatar">王</div>
+          <div class="msg-content">
+            <div class="msg-meta">
+              <span class="msg-sender">王五 (@wangwu_rust)</span>
+              <span class="msg-time">14:28</span>
+            </div>
+            <div>我们之前也踩过这个坑，推荐挂 <code>tokio-console</code> 采样抓一下。80% 的概率是哪个内部通信用了 <code>unbounded_channel</code> 没有做 backpressure，消费端一慢 buffer 就爆炸。</div>
+          </div>
+        </div>
+
+        <!-- Msg 4 (Highlight) -->
+        <div class="msg-bubble" id="keyEvidenceMsg">
+          <div class="msg-avatar" style="background:#d97706; color:#000;">张</div>
+          <div class="msg-content highlight">
+            <div class="msg-meta">
+              <span class="msg-sender" style="color:#f59e0b;">张三 (@zhangsan) ★ 关键结论</span>
+              <span class="msg-time">14:35</span>
+            </div>
+            <div>卧槽！挂 console 抓了一下，真的是内部上报指标用了一个 <code>mpsc::unbounded_channel()</code>！改成了 bounded(2048) 之后内存瞬间平稳回落到 130MB 了，感谢各位大佬拯救！🙏</div>
+          </div>
+        </div>
+
+        <!-- Msg 5 -->
+        <div class="msg-bubble">
+          <div class="msg-avatar">李</div>
+          <div class="msg-content">
+            <div class="msg-meta">
+              <span class="msg-sender">李四 (@lisi_dev)</span>
+              <span class="msg-time">14:38</span>
+            </div>
+            <div>生产环境切记千万不要偷懒用 unbounded，宁愿丢日志做降级，也不能在内存里无限堆积。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="evidence-footer">
+        <a href="#">在新标签页打开当天完整聊天记录 (1,248 条) →</a>
+      </div>
+    </aside>
+
+  </div>
+
+  <script>
+    function toggleEvidence() {
+      const col = document.getElementById('evidenceCol');
+      const btn = document.getElementById('toggleEvidenceBtn');
+      if (col.style.display === 'none') {
+        col.style.display = 'flex';
+        btn.classList.add('btn-toggle-split');
+        btn.innerText = '⚡ 同屏证据链 (已开启)';
+      } else {
+        col.style.display = 'none';
+        btn.classList.remove('btn-toggle-split');
+        btn.innerText = '⚡ 展开同屏证据';
+      }
+    }
+
+    document.getElementById('toggleEvidenceBtn').onclick = toggleEvidence;
+
+    function highlightEvidence(id) {
+      const col = document.getElementById('evidenceCol');
+      if (col.style.display === 'none') {
+        toggleEvidence();
+      }
+      const msg = document.getElementById('keyEvidenceMsg');
+      if (msg) {
+        msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        msg.querySelector('.msg-content').style.transition = 'all 200ms ease';
+        msg.querySelector('.msg-content').style.transform = 'scale(1.02)';
+        setTimeout(() => {
+          msg.querySelector('.msg-content').style.transform = 'scale(1)';
+        }, 300);
+      }
+    }
+  </script>
+</body>
+</html>

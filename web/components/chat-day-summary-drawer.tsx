@@ -9,12 +9,14 @@ export function ChatDaySummaryDrawer({
   chatId,
   chatTitle,
   date,
+  topicId = 0,
   onClose,
   open,
 }: {
   chatId: number;
   chatTitle: string;
   date: string;
+  topicId?: number;
   onClose: () => void;
   open: boolean;
 }) {
@@ -27,10 +29,15 @@ export function ChatDaySummaryDrawer({
 
   const loadSummary = useCallback(async () => {
     const response = await api.listSummaries({
-      chatId: String(chatId), dateFrom: date, dateTo: date, page: 1, pageSize: 1,
+      chatId: String(chatId),
+      topicId: topicId ? String(topicId) : undefined,
+      dateFrom: date,
+      dateTo: date,
+      page: 1,
+      pageSize: 1,
     });
     setSummary(response.items[0] || null);
-  }, [chatId, date]);
+  }, [chatId, date, topicId]);
 
   useEffect(() => {
     if (!open || !date) return;
@@ -57,9 +64,38 @@ export function ChatDaySummaryDrawer({
     };
   }, [chatId, date, loadSummary, open]);
 
+  async function handleGenerateNow() {
+    await api.runSummary(chatId, date, topicId || 0);
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await api.listSummaries({
+          chatId: String(chatId),
+          topicId: topicId ? String(topicId) : undefined,
+          dateFrom: date,
+          dateTo: date,
+          page: 1,
+          pageSize: 1,
+        });
+        if (res.items.length > 0) {
+          setSummary(res.items[0]);
+          if (res.items[0].status !== "pending" && res.items[0].status !== "running") {
+            clearInterval(interval);
+          }
+        }
+      } catch {
+        // ignore
+      }
+      if (attempts >= 25) {
+        clearInterval(interval);
+      }
+    }, 2000);
+  }
+
   const emptyTitle = error ? "当天摘要加载失败" : "当天还没有摘要";
   const emptyDescription = error
-    || "这个日期还没有生成摘要，可以前往摘要页手动生成。";
+    || "这个日期或当前话题尚未生成摘要，可直接在此处一键发起生成。";
 
   return (
     <SummaryDrawerPair
@@ -69,6 +105,7 @@ export function ChatDaySummaryDrawer({
       emptyTitle={emptyTitle}
       loading={loading}
       onClose={onClose}
+      onGenerateNow={handleGenerateNow}
       onRefresh={loadSummary}
       open={open}
       selectedChat={chat}

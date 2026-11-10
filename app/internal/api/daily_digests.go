@@ -62,10 +62,6 @@ func (r *Router) handleDailyDigestByID(w http.ResponseWriter, req *http.Request)
 	}
 	if len(parts) == 2 && parts[1] == "rerun" && req.Method == http.MethodPost {
 		if err := r.dailyDigests.Rerun(req.Context(), id); err != nil {
-			if errors.Is(err, dailydigest.ErrBotUnavailable) {
-				httpx.Error(w, http.StatusBadRequest, r.localized(req.Context(), "请先启用并配置 Telegram Bot。", "Enable and configure Telegram Bot first."))
-				return
-			}
 			if errors.Is(err, dailydigest.ErrSourcesNotReady) {
 				message := strings.TrimSuffix(err.Error(), ": "+dailydigest.ErrSourcesNotReady.Error())
 				if err == dailydigest.ErrSourcesNotReady {
@@ -93,4 +89,32 @@ func (r *Router) handleDailyDigestByID(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	httpx.Error(w, http.StatusNotFound, "not found")
+}
+
+func (r *Router) handleRunDailyDigest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		httpx.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var payload struct {
+		Date string `json:"date"`
+	}
+	if err := httpx.DecodeJSON(req, &payload); err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	date := strings.TrimSpace(payload.Date)
+	if date == "" {
+		httpx.Error(w, http.StatusBadRequest, "date is required")
+		return
+	}
+	if err := r.dailyDigests.Run(req.Context(), date); err != nil {
+		if errors.Is(err, dailydigest.ErrSourcesNotReady) {
+			httpx.Error(w, http.StatusBadRequest, r.localized(req.Context(), "来源摘要尚未全部就绪，请等待单群摘要完成后重试。", "Source summaries are not ready yet."))
+			return
+		}
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusAccepted, map[string]string{"message": "Daily Digest generation started"})
 }

@@ -3,35 +3,41 @@
 import Link from "next/link";
 import { CSSProperties, PropsWithChildren, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { api } from "@/lib/api";
-import { Bootstrap } from "@/lib/types";
-import { onBootstrapRefresh } from "@/lib/bootstrap-sync";
+import { SWRConfig } from "swr";
 import { StatusPill } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
+import { useBootstrap, useTasks } from "@/lib/hooks";
+import { TaskCenterFlyout } from "@/components/task-center-flyout";
 
 export function DashboardShell({ children }: PropsWithChildren) {
+  return (
+    <SWRConfig
+      value={{
+        revalidateOnFocus: false,
+        dedupingInterval: 5000,
+      }}
+    >
+      <DashboardShellInner>{children}</DashboardShellInner>
+    </SWRConfig>
+  );
+}
+
+function DashboardShellInner({ children }: PropsWithChildren) {
   const router = useRouter();
   const pathname = usePathname();
   const { setLanguage } = useI18n();
-  const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
+  const { data: bootstrap } = useBootstrap();
+  const { tasks, runningCount, failedCount, clearFinished, removeTask, refreshTasks } = useTasks();
+  const [taskFlyoutOpen, setTaskFlyoutOpen] = useState(false);
 
   useEffect(() => {
-    function refreshBootstrap() {
-      void api
-        .bootstrap()
-        .then((data) => {
-          setBootstrap(data);
-          setLanguage(data.language);
-          if (data.passwordConfigured && !data.authenticated) {
-            router.replace("/login");
-          }
-        })
-        .catch(() => null);
+    if (bootstrap) {
+      setLanguage(bootstrap.language);
+      if (bootstrap.passwordConfigured && !bootstrap.authenticated) {
+        router.replace("/login");
+      }
     }
-
-    refreshBootstrap();
-    return onBootstrapRefresh(refreshBootstrap);
-  }, [router, setLanguage]);
+  }, [bootstrap, router, setLanguage]);
 
   return (
     <div className="dashboard-canvas">
@@ -63,6 +69,22 @@ export function DashboardShell({ children }: PropsWithChildren) {
             ))}
           </nav>
 
+          {/* Ambient Task Center Button */}
+          <div className="dashboard-sidebar-tasks">
+            <button
+              className={`sidebar-task-pill${runningCount > 0 ? " running" : failedCount > 0 ? " failed" : ""}`}
+              onClick={() => setTaskFlyoutOpen(true)}
+              type="button"
+              title="查看后台任务进度"
+            >
+              <span className={`task-pulse-dot${runningCount > 0 ? " pulsing" : failedCount > 0 ? " alert" : ""}`} />
+              <span className="task-pill-text">
+                {runningCount > 0 ? `${runningCount} 个任务运行中` : failedCount > 0 ? `${failedCount} 个任务需关注` : "任务中心"}
+              </span>
+              {tasks.length > 0 && <span className="task-pill-count">{tasks.length}</span>}
+            </button>
+          </div>
+
           <div className="dashboard-sidebar-status">
             <div className="sidebar-status-item">
               <span>Telegram</span>
@@ -78,20 +100,30 @@ export function DashboardShell({ children }: PropsWithChildren) {
             </div>
           </div>
         </aside>
+
         <div className="dashboard-main">
           <div className="dashboard-main-content" key={pathname}>
             {children}
           </div>
         </div>
       </div>
+
+      <TaskCenterFlyout
+        isOpen={taskFlyoutOpen}
+        onClearFinished={clearFinished}
+        onClose={() => setTaskFlyoutOpen(false)}
+        onRefresh={() => void refreshTasks()}
+        onRemoveTask={removeTask}
+        tasks={tasks}
+      />
     </div>
   );
 }
 
 const dashboardNavigation = [
-  { href: "/dashboard/chats", label: "群组", icon: "chats" },
-  { href: "/dashboard/summaries", label: "摘要", icon: "summaries" },
-  { href: "/dashboard/settings", label: "系统配置", icon: "settings" },
+  { href: "/dashboard/summaries", label: "今日简报", icon: "summaries" },
+  { href: "/dashboard/chats", label: "消息与证据", icon: "chats" },
+  { href: "/dashboard/settings", label: "信源与系统", icon: "settings" },
 ] as const;
 
 function activeNavigationIndex(pathname: string) {

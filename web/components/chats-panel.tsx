@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   startTransition,
   useCallback,
@@ -20,6 +21,8 @@ import { DashboardPage, EmptyState, MetricCard, MetricRail, Surface } from "@/co
 import { useToast } from "@/components/toast";
 import { Button, Field, Input, StatusPill, Textarea } from "@/components/ui";
 import { onHistoryBackfillCompleted } from "@/lib/history-backfill-sync";
+import { taskStore } from "@/lib/task-store";
+import { ChatConfigDrawer } from "@/components/chat-config-drawer";
 
 type ChatTypeFilter = "all" | Chat["chatType"];
 type SwitchFilter = "all" | "yes" | "no";
@@ -34,15 +37,18 @@ const historyRangeOptions = [
 ];
 
 export function ChatsPanel() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [items, setItems] = useState<Chat[]>([]);
   const [savedItems, setSavedItems] = useState<Chat[]>([]);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingChat, setEditingChat] = useState<Chat | null>(null);
   const [expandedForumIDs, setExpandedForumIDs] = useState<Set<number>>(new Set());
   const [busyTopicID, setBusyTopicID] = useState<number | null>(null);
-  const [query, setQuery] = useState("");
-  const [chatType, setChatType] = useState<ChatTypeFilter>("all");
-  const [messageSaveFilter, setMessageSaveFilter] = useState<SwitchFilter>("all");
-  const [summaryFilter, setSummaryFilter] = useState<SwitchFilter>("all");
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [chatType, setChatType] = useState<ChatTypeFilter>((searchParams.get("type") as ChatTypeFilter) || "all");
+  const [messageSaveFilter, setMessageSaveFilter] = useState<SwitchFilter>((searchParams.get("saved") as SwitchFilter) || "all");
+  const [summaryFilter, setSummaryFilter] = useState<SwitchFilter>((searchParams.get("summarized") as SwitchFilter) || "all");
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [messageQuery, setMessageQuery] = useState("");
   const [messageSearchPage, setMessageSearchPage] = useState(1);
@@ -55,6 +61,16 @@ export function ChatsPanel() {
     showErrorRef.current = toast.showError;
   }, [toast.showError]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (deferredQuery) params.set("q", deferredQuery); else params.delete("q");
+    if (chatType !== "all") params.set("type", chatType); else params.delete("type");
+    if (messageSaveFilter !== "all") params.set("saved", messageSaveFilter); else params.delete("saved");
+    if (summaryFilter !== "all") params.set("summarized", summaryFilter); else params.delete("summarized");
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+  }, [chatType, deferredQuery, messageSaveFilter, pathname, summaryFilter]);
+
   const load = useCallback(async () => {
     try {
       const [chatData, settings] = await Promise.all([
@@ -65,9 +81,7 @@ export function ChatsPanel() {
       setItems(chats);
       setSavedItems(chats);
       setBotSummaryDeliveryMode(settings.botSummaryDeliveryMode || "per_chat");
-      setEditingId((current) =>
-        current && chats.some((chat) => chat.id === current) ? current : null
-      );
+      setEditingChat((current) => current ? chats.find((chat) => chat.id === current.id) || null : null);
     } catch (err) {
       showErrorRef.current(asMessage(err));
     }
@@ -97,6 +111,14 @@ export function ChatsPanel() {
     try {
       const task = await api.startHistoryBackfill(chat.id, fromDate, toDate);
       toast.watchHistoryBackfill(task);
+      taskStore.addTask({
+        id: task.id,
+        kind: "backfill",
+        title: `历史回补: ${chat.title} (${fromDate} ~ ${toDate})`,
+        progress: { current: task.importedCount, total: task.importedCount },
+        status: task.status,
+        startedAt: task.createdAt,
+      });
     } catch (err) {
       toast.showError(asMessage(err));
     }
@@ -192,21 +214,33 @@ export function ChatsPanel() {
           label="已同步群组"
           value={syncedCount}
           badge="最新"
-          detail="所有已绑定 Telegram 账号下可管理的群组与超级群组。"
+          tone={chatType === "all" && messageSaveFilter === "all" && summaryFilter === "all" ? "good" : "neutral"}
+          detail="点击重置所有筛选，查看全部群组。"
+          onClick={() => {
+            setMessageSaveFilter("all");
+            setSummaryFilter("all");
+            setChatType("all");
+          }}
         />
         <MetricCard
           label="已启用消息保存"
           value={messageSaveCount}
-          tone={messageSaveCount > 0 ? "good" : "neutral"}
-          badge={messageSaveCount > 0 ? "运行中" : "未启用"}
-          detail="启用后，系统会实时保存该群的消息。"
+          tone={messageSaveFilter === "yes" ? "good" : "neutral"}
+          badge={messageSaveFilter === "yes" ? "已筛选" : "运行中"}
+          detail="点击筛选仅开启消息保存的群组。"
+          onClick={() => {
+            setMessageSaveFilter(messageSaveFilter === "yes" ? "all" : "yes");
+          }}
         />
         <MetricCard
           label="已启用 AI 总结"
           value={summaryEnabledCount}
-          tone={summaryEnabledCount > 0 ? "good" : "neutral"}
-          badge={summaryEnabledCount > 0 ? "已配置" : "未启用"}
-          detail="只有启用 AI 总结的群组才会参与每日摘要。"
+          tone={summaryFilter === "yes" ? "good" : "neutral"}
+          badge={summaryFilter === "yes" ? "已筛选" : "已配置"}
+          detail="点击筛选参与每日摘要的群组。"
+          onClick={() => {
+            setSummaryFilter(summaryFilter === "yes" ? "all" : "yes");
+          }}
         />
       </MetricRail>
 
@@ -320,13 +354,13 @@ export function ChatsPanel() {
                         botSummaryDeliveryMode={botSummaryDeliveryMode}
                         busyTopicID={busyTopicID}
                         chat={chat}
-                        editing={editingId === chat.id}
+                        editing={editingChat?.id === chat.id}
                         topicsExpanded={expandedForumIDs.has(chat.id)}
                         onBackfill={(fromDate, toDate) =>
                           startTransition(() => void startHistoryBackfill(chat, fromDate, toDate))
                         }
                         onEdit={() =>
-                          setEditingId((current) => (current === chat.id ? null : chat.id))
+                          setEditingChat(chat)
                         }
                         onPatch={(patch) => patchChat(chat.id, patch)}
                         onSave={() => startTransition(() => void saveChat(chat))}
@@ -343,6 +377,17 @@ export function ChatsPanel() {
         )}
       </Surface>
 
+      <ChatConfigDrawer
+        botSummaryDeliveryMode={botSummaryDeliveryMode}
+        chat={editingChat}
+        onClose={() => setEditingChat(null)}
+        onSave={async (patch) => {
+          if (editingChat) {
+            await saveChat({ ...editingChat, ...patch });
+          }
+        }}
+        open={Boolean(editingChat)}
+      />
     </DashboardPage>
   );
 }
@@ -603,10 +648,10 @@ function ChatTableRow({
               </Button>
             ) : null}
             <Button
-              aria-label={editing ? "收起编辑" : "编辑群组配置"}
-              className={editing ? "table-icon-button active" : "table-icon-button"}
+              aria-label="编辑群组配置"
+              className="table-icon-button"
               onClick={onEdit}
-              title={editing ? "收起编辑" : "编辑群组配置"}
+              title="编辑群组配置"
               type="button"
               variant="ghost"
             >

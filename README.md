@@ -12,6 +12,13 @@ TGTLDR （Telegram Too Long, Don't Read）是一个单用户自部署的 Telegra
 
 ### 功能特性
 
+- **三位一体智能阅读工作台**：以“信息消费”为第一优先级，默认直达「今日简报」中枢，告别传统冰冷运维后台
+- **Telegram 论坛超级群（Topics）一等公民支持**：群组管理与聊天记录流全面支持话题维度切换与独立过滤，支持论坛话题独立配置消息保存与 AI 总结开关
+- **双向证据链（Evidence Loop）**：摘要详情一键直跳对应群组、日期及话题的原生聊天记录与上下文；聊天记录中无摘要时支持就地一键发起生成并即时刷新
+- **全局后台任务中心（Ambient Task Center）**：侧边栏常驻呼吸脉冲指示灯与浮动任务面板，实时追踪历史消息回补、批量摘要与快速回顾进度，切换页面不丢失
+- **现代化阅读器与沉浸模式（Zen Mode）**：支持抽屉全屏专注阅读模式，支持 Markdown 源码 / 纯文本一键复制及 `.md` 文件一键导出，内联展示执行审计与 Prompt 预览，彻底杜绝“抽屉叠抽屉”
+- **SWR 跨页面缓存与 URL 状态机**：切页零白屏、免重复请求，全站筛选条件、搜索词及抽屉状态全面与 URL 深度同步，支持书签收藏与深链接分享
+- **群组配置抽屉与表单单轨制**：独立侧滑配置面板替代卡顿的内联表格行展开，系统配置中 Bot Chat ID 自动回填单轨提交，保障表单数据一致性
 - 监听已加入的 Telegram 群组消息，并保存到本地数据库
 - 按群组配置每日摘要时间、Prompt、过滤规则和摘要模型
 - 使用 OpenAI 兼容接口生成群聊摘要
@@ -203,6 +210,7 @@ server {
 
 - [架构方案](docs/ARCHITECTURE.md)
 - [产品流程与实施计划](docs/PRODUCT_FLOW.md)
+- [UI/UX 交互与工作台设计总结](docs/UI_UX_CURRENT_INTERACTION.md)
 
 ---
 
@@ -216,6 +224,13 @@ This project exists because many Telegram groups are large, noisy communities th
 
 ### Features
 
+- **Three-in-One Reader Workbench (UI/UX 2.0)**: Information-consumption-first design; lands directly on the "Digest Hub" dashboard instead of a cluttered admin panel
+- **Telegram Forum Topics as First-Class Citizens**: Full support for Telegram Forum supergroups, including topic switching, dedicated message stream filtering, and per-topic collection/summary toggles
+- **Bidirectional Evidence Loop**: Instant one-click jump from any summary to original raw chat messages for verification; in-place instant summary generation right inside the chat history view
+- **Ambient Task Center**: Persistent breathing pulse indicator and slide-over task flyout to monitor history backfills, batch summaries, and catch-ups in real-time across page transitions
+- **Modern Reader Experience**: Zen Mode distraction-free reading, one-click copy (Markdown source & plain text), one-click `.md` file export, and inline collapsible execution audits without drawer-over-drawer clutter
+- **SWR Caching & URL-as-State**: Fast zero-flicker client-side cache across navigation; all filters, search terms, and drawer states are synchronized with the URL for easy bookmarking and deep linking
+- **Slide-Over Group Config Drawer**: Clean slide-over configuration drawer replacing intrusive inline table rows, with unified single-track save semantics
 - Monitor Telegram groups you have joined and store messages in a local database
 - Configure daily summary time, prompts, filters, and summary model per group
 - Generate group summaries through an OpenAI-compatible API

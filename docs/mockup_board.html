@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TGTLDR · 智能情报看板 (Linear Kanban Board)</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --sidebar: #161b22;
+      --board-col: #161b22;
+      --card: #21262d;
+      --card-hover: #30363d;
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #f0f6fc;
+      --text-muted: #8b949e;
+      --brand: #58a6ff;
+      --accent: #d29922;
+      --danger: #f85149;
+      --success: #3fb950;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Bar */
+    .topbar {
+      height: 52px;
+      padding: 0 24px;
+      background: var(--sidebar);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .board-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .board-badge {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: rgba(88, 166, 255, 0.15);
+      color: var(--brand);
+      font-weight: 600;
+    }
+    .board-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: #fff;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    /* Kanban Board Container (Horizontal Scroll) */
+    .board-container {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      padding: 20px 24px;
+      overflow-x: auto;
+    }
+
+    .board-column {
+      width: 340px;
+      background: var(--board-col);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      max-height: 100%;
+    }
+
+    .column-head {
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .column-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    .col-count {
+      font-size: 0.75rem;
+      padding: 1px 7px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text-muted);
+    }
+
+    .column-cards {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Board Card */
+    .kanban-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 140ms;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .kanban-card:hover {
+      background: var(--card-hover);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .k-card-source {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+    .k-source-name {
+      font-weight: 600;
+      color: var(--brand);
+    }
+
+    .k-card-title {
+      font-size: 0.92rem;
+      font-weight: 600;
+      line-height: 1.4;
+      color: #fff;
+    }
+
+    .k-card-tldr {
+      font-size: 0.8rem;
+      color: #8b949e;
+      line-height: 1.5;
+      background: rgba(0,0,0,0.2);
+      padding: 8px 10px;
+      border-radius: 6px;
+    }
+
+    .k-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+      font-size: 0.72rem;
+    }
+    .k-tags {
+      display: flex;
+      gap: 4px;
+    }
+    .k-tag {
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.06);
+      color: #8b949e;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="board-title">
+      <span>TGTLDR 看板</span>
+      <span class="board-badge">2026-11-03 每日全景</span>
+      <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted);">14 个群 · 5,120 条消息已分类</span>
+    </div>
+    <div class="board-controls">
+      <button class="btn">🔍 过滤群组</button>
+      <button class="btn">📅 选择日期</button>
+      <button class="btn" style="background:#238636; border-color:#238636;">📋 导出整板</button>
+    </div>
+  </header>
+
+  <main class="board-container">
+    <!-- Col 1: 高危预警与事故 -->
+    <div class="board-column">
+      <div class="column-head">
+        <div class="column-title-group">
+          <span style="color:var(--danger);">●</span>
+          <span>高危预警与生产事故</span>
+        </div>
+        <span class="col-count">1</span>
+      </div>
+      <div class="column-cards">
+        <div class="kanban-card" style="border-left: 3px solid var(--danger);">
+          <div class="k-card-source">
+            <span class="k-source-name">🦀 Rust 中文技术社区</span>
+            <span>18:00</span>
+          </div>
+          <div class="k-card-title">Tokio 异步无界 Channel 导致线上网关内存暴涨 OOM 事故复盘</div>
+          <div class="k-card-tldr">内部监控上报误用 unbounded_channel 积压超 40 万 Task。已全面替换为 bounded(2048)。</div>
+          <div class="k-card-footer">
+            <div class="k-tags"><span class="k-tag">#内存泄漏</span><span class="k-tag">#Tokio</span></div>
+            <span style="color:var(--accent);">16条原声 ↗</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Col 2: 核心技术演进 -->
+    <div class="board-column">
+      <div class="column-head">
+        <div class="column-title-group">
+          <span style="color:var(--brand);">●</span>
+          <span>架构与技术演进</span>
+        </div>
+        <span class="col-count">2</span>
+      </div>
+      <div class="column-cards">
+        <div class="kanban-card">
+          <div class="k-card-source">
+            <span class="k-source-name">🦀 Rust 社区</span>
+            <span>15:30</span>
+          </div>
+          <div class="k-card-title">Rust v1.82 稳定版官方裸指针特性与 addr_of 宏深度评估</div>
+          <div class="k-card-tldr">改进未对齐指针解引用安全性，无借用开销下提升嵌入式与 FFI 稳定性。</div>
+          <div class="k-card-footer">
+            <div class="k-tags"><span class="k-tag">#v1.82</span><span class="k-tag">#FFI</span></div>
+            <span>9条原声 ↗</span>
+          </div>
+        </div>
+
+        <div class="kanban-card">
+          <div class="k-card-source">
+            <span class="k-source-name">🐹 Go 核心生态</span>
+            <span>12:00</span>
+          </div>
+          <div class="k-card-title">Go 1.25 编译器内联优化机制改动与 sync.Pool GC 行为</div>
+          <div class="k-card-tldr">大对象频繁复用场景下的垃圾回收延迟测试与最佳参数配置。</div>
+          <div class="k-card-footer">
+            <div class="k-tags"><span class="k-tag">#GC</span><span class="k-tag">#编译器</span></div>
+            <span>14条原声 ↗</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Col 3: AI 与大模型 -->
+    <div class="board-column">
+      <div class="column-head">
+        <div class="column-title-group">
+          <span style="color:var(--success);">●</span>
+          <span>AI 与模型前沿</span>
+        </div>
+        <span class="col-count">2</span>
+      </div>
+      <div class="column-cards">
+        <div class="kanban-card" style="border-left: 3px solid var(--success);">
+          <div class="k-card-source">
+            <span class="k-source-name">🤖 AI 原生应用研讨群</span>
+            <span>16:40</span>
+          </div>
+          <div class="k-card-title">DeepSeek 新多模态架构推理成本降低 65%</div>
+          <div class="k-card-tldr">长上下文评测追平顶尖梯队，群友分享在 Cursor / Claude Code 中自动生成单测实战。</div>
+          <div class="k-card-footer">
+            <div class="k-tags"><span class="k-tag">#DeepSeek</span><span class="k-tag">#Cursor</span></div>
+            <span style="color:var(--accent);">28条原声 ↗</span>
+          </div>
+        </div>
+
+        <div class="kanban-card">
+          <div class="k-card-source">
+            <span class="k-source-name">🧠 开源模型实战</span>
+            <span>11:20</span>
+          </div>
+          <div class="k-card-title">多卡 vLLM 分布式推理在 RTX 4090 上的显存分配优化</div>
+          <div class="k-card-tldr">解决跨卡通信瓶颈，通过 PagedAttention 动态调度提升并发吞吐量 30%。</div>
+          <div class="k-card-footer">
+            <div class="k-tags"><span class="k-tag">#vLLM</span><span class="k-tag">#显存优化</span></div>
+            <span>11条原声 ↗</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Col 4: 行业动态与出海 -->
+    <div class="board-column">
+      <div class="column-head">
+        <div class="column-title-group">
+          <span style="color:var(--accent);">●</span>
+          <span>行业动态与项目研讨</span>
+        </div>
+        <span class="col-count">1</span>
+      </div>
+      <div class="column-cards">
+        <div class="kanban-card">
+          <div class="k-card-source">
+            <span class="k-source-name">🌐 Web3 · #技术架构</span>
+            <span>14:15</span>
+          </div>
+          <div class="k-card-title">Layer2 验证者节点同步延迟解决方案与 ZK 验证开销</div>
+          <div class="k-card-tldr">提出基于 P2P 分片传播机制，深度对比三大 DA 层开销。</div>
+          <div class="k-card-footer">
+            <div class="k-tags"><span class="k-tag">#Layer2</span><span class="k-tag">#DA</span></div>
+            <span>8条原声 ↗</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</body>
+</html>

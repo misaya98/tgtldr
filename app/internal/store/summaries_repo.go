@@ -88,6 +88,46 @@ func (r *SummaryRepository) GetByChatTopicAndDate(ctx context.Context, chatID, t
 	return item, nil
 }
 
+// ListByChatAndDateAllTopics 返回某群某天所有话题的摘要，供论坛群合并进每日总览。
+func (r *SummaryRepository) ListByChatAndDateAllTopics(ctx context.Context, chatID int64, date string) ([]model.Summary, error) {
+	rows, err := r.pool.Query(ctx, `
+		select s.id, s.chat_id, s.topic_id, s.summary_date::text, s.status, s.content, s.model, s.requested_model, s.returned_model,
+		       s.source_message_count, s.chunk_count, s.generated_at, s.delivered_at,
+		       s.delivery_error, s.error_message, s.error_context, s.error_system_prompt,
+		       s.error_user_prompt, s.retry_count, s.next_retry_at, s.bot_summary_delivery_mode,
+		       ''::text as match_snippet,
+		       '{}'::text[] as matched_fields, coalesce(dds.daily_digest_id, 0),
+		       coalesce(dds.included, false), coalesce(dds.omission_reason, ''),
+		       coalesce(dd.status, date_dd.status, ''), dd.delivered_at, coalesce(dd.delivery_error, ''),
+		       coalesce(dd.delivery_skipped_reason, ''), coalesce(dd.delivery_suppressed, false),
+		       s.created_at, s.updated_at, coalesce(t.title, '')
+		from summaries s
+		left join chat_topics t on t.id = s.topic_id
+		left join daily_digest_sources dds on dds.summary_id = s.id
+		left join daily_digests dd on dd.id = dds.daily_digest_id
+		left join daily_digests date_dd on date_dd.summary_date = s.summary_date
+		where s.chat_id = $1 and s.summary_date = $2::date
+		order by s.topic_id, s.id
+	`, chatID, date)
+	if err != nil {
+		return nil, fmt.Errorf("list summaries for chat %d on %s: %w", chatID, date, err)
+	}
+	defer rows.Close()
+
+	items := make([]model.Summary, 0)
+	for rows.Next() {
+		var item model.Summary
+		if err := scanSummary(rows, &item); err != nil {
+			return nil, fmt.Errorf("scan summary for chat %d on %s: %w", chatID, date, err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate summaries for chat %d on %s: %w", chatID, date, err)
+	}
+	return items, nil
+}
+
 func (r *SummaryRepository) GetByChatAndDateWithScope(ctx context.Context, chatID, topicID int64, date string) (model.Summary, error) {
 	if topicID > 0 {
 		return r.GetByChatTopicAndDate(ctx, chatID, topicID, date)

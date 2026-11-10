@@ -1,4 +1,5 @@
 import "./globals.css";
+import "./workbench.css";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { ToastProvider } from "@/components/toast";

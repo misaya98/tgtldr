@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ChatMessagesPanel } from "@/components/chat-messages-panel";
 
@@ -11,5 +12,9 @@ export default async function ChatMessagesPage(props: ChatMessagesPageProps) {
     notFound();
   }
 
-  return <ChatMessagesPanel chatId={Number(params.chatId)} />;
+  return (
+    <Suspense fallback={null}>
+      <ChatMessagesPanel chatId={Number(params.chatId)} />
+    </Suspense>
+  );
 }

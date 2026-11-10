@@ -13,7 +13,7 @@ import (
 )
 
 func TestParticipantChats(t *testing.T) {
-	Convey("只选择开启摘要且参与 Bot 推送的群组并稳定排序", t, func() {
+	Convey("选择所有开启摘要的群组并稳定排序，不依赖 Bot 投递设置", t, func() {
 		chats := participantChats([]model.Chat{
 			{ID: 3, Title: "群 C", SummaryEnabled: true, DeliveryMode: model.DeliveryModeBot},
 			{ID: 2, Title: "群 B", SummaryEnabled: true, DeliveryMode: model.DeliveryModeDashboard},
@@ -21,9 +21,10 @@ func TestParticipantChats(t *testing.T) {
 			{ID: 4, Title: "群 D", SummaryEnabled: false, DeliveryMode: model.DeliveryModeBot},
 		})
 
-		So(chats, ShouldHaveLength, 2)
+		So(chats, ShouldHaveLength, 3)
 		So(chats[0].ID, ShouldEqual, int64(1))
-		So(chats[1].ID, ShouldEqual, int64(3))
+		So(chats[1].ID, ShouldEqual, int64(2))
+		So(chats[2].ID, ShouldEqual, int64(3))
 	})
 }
 
@@ -37,6 +38,26 @@ func TestAllParticipantsDue(t *testing.T) {
 	Convey("最后一个参与群组到达摘要时间后才允许生成", t, func() {
 		So(allParticipantsDue(time.Date(2026, 9, 5, 9, 29, 0, 0, shanghai), chats, "Asia/Shanghai"), ShouldBeFalse)
 		So(allParticipantsDue(time.Date(2026, 9, 5, 9, 30, 0, 0, shanghai), chats, "Asia/Shanghai"), ShouldBeTrue)
+	})
+}
+
+func TestMergeTopicSummaries(t *testing.T) {
+	generated := time.Date(2026, 11, 10, 1, 0, 0, 0, time.UTC)
+
+	Convey("把论坛群多个话题摘要合并为一个群级来源", t, func() {
+		merged := mergeTopicSummaries([]model.Summary{
+			{ID: 11, TopicID: 1, TopicTitle: "闲聊", Status: model.SummaryStatusSucceeded, SourceMessageCount: 30, ChunkCount: 1, Content: "话题一内容", GeneratedAt: generated},
+			{ID: 12, TopicID: 2, TopicTitle: "技术", Status: model.SummaryStatusSucceeded, SourceMessageCount: 20, ChunkCount: 2, Content: "话题二内容", GeneratedAt: generated.Add(time.Minute)},
+		})
+
+		So(merged.ID, ShouldEqual, int64(11))
+		So(merged.TopicID, ShouldEqual, int64(0))
+		So(merged.Status, ShouldEqual, model.SummaryStatusSucceeded)
+		So(merged.SourceMessageCount, ShouldEqual, 50)
+		So(merged.ChunkCount, ShouldEqual, 3)
+		So(merged.Content, ShouldContainSubstring, "### 闲聊")
+		So(merged.Content, ShouldContainSubstring, "### 技术")
+		So(merged.GeneratedAt.Equal(generated.Add(time.Minute)), ShouldBeTrue)
 	})
 }
 

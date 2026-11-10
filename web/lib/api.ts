@@ -330,6 +330,11 @@ export const api = {
     request(`/api/catch-ups/${catchUpId}/retry-delivery`, {
       method: "POST",
     }),
+  runDailyDigest: (date: string) =>
+    request("/api/daily-digests/run", {
+      method: "POST",
+      body: JSON.stringify({ date }),
+    }),
   listDailyDigests: (page = 1, pageSize = 20) =>
     request<DailyDigestListResponse>(
       `/api/daily-digests${buildQuery({ page, pageSize })}`,

@@ -34,7 +34,7 @@ export function DailyDigestExperience({
   const toast = useToast();
   const showErrorRef = useRef(toast.showError);
   const settingsLoaded = botConfigured !== null;
-  const enabled = deliveryMode === "daily_digest" && botReady;
+  const enabled = deliveryMode === "daily_digest";
 
   useEffect(() => {
     showErrorRef.current = toast.showError;
@@ -55,10 +55,7 @@ export function DailyDigestExperience({
 
   /** 打开确认弹窗；Bot 配置不完整时改为引导用户完成设置。 */
   function openEnableDialog() {
-    if (botConfigured === null) {
-      return;
-    }
-    setEnableDialog(botConfigured ? "confirm" : "configure");
+    setEnableDialog("confirm");
   }
 
   /** 同时开启 Bot 推送并将摘要包装方式切换为每日总览。 */
@@ -69,19 +66,14 @@ export function DailyDigestExperience({
     setEnabling(true);
     try {
       const current = await api.settings();
-      if (!hasCompleteBotConfiguration(current)) {
-        setEnableDialog("configure");
-        return;
-      }
       const saved = await api.saveSettings({
         ...current,
-        botEnabled: true,
         botSummaryDeliveryMode: "daily_digest",
       });
       onEnabled(saved);
       notifyBootstrapRefresh();
       setEnableDialog("closed");
-      toast.showSuccess("每日总览已启用，将从今天的消息开始生效。");
+      toast.showSuccess("每日总览已启用，每天将自动生成全群总览简报。");
     } catch (error) {
       toast.showError(asMessage(error));
     } finally {
@@ -106,7 +98,7 @@ export function DailyDigestExperience({
         <div>
           <span>每日总览</span>
           <h2>一天一篇，看完所有群</h2>
-          <p>将所有参与推送的群组摘要合并成一篇，每天只接收一次 Telegram 推送。</p>
+          <p>将所有开启 AI 总结的群组摘要汇总成一篇全天总览简报，可直接在网页端沉浸阅读，可选 Telegram Bot 同步推送。</p>
           <div className="daily-digest-cta-status">
             {settingsLoaded ? (
               <StatusPill tone={enabled ? "good" : "neutral"}>
@@ -148,42 +140,28 @@ export function DailyDigestExperience({
             </Button>
           </div>
         )}
-        description="有可汇总内容时，每天只会收到一篇跨群总览。"
+        description="系统将在每天单群摘要全部完成后，自动合并生成全日总览。"
         onClose={closeEnableDialog}
         open={enableDialog === "confirm"}
         title="启用每日总览？"
       >
         <div className="daily-digest-enable-copy">
           <p>
-            启用时，所有已开启 AI 总结的群组（包括仅网页查看的群组）都会自动参与推送。系统会等待各群摘要完成，合并成一篇「每日总览」发送到 Telegram。之后可在群组设置中单独取消参与。
+            启用后，所有已开启 AI 总结的群组都会自动汇总生成「每日总览」。你可以在网页端随时查看完整正文、复制与导出。
           </p>
-          {!botReady ? (
+          {botReady ? (
             <div className="daily-digest-enable-note">
-              <strong>同时启用 Telegram Bot</strong>
-              <span>Telegram Bot 当前未启用，确认后会一并开启。</span>
+              <strong>已开启 Telegram Bot</strong>
+              <span>总览生成后将同步发送到已绑定的 Telegram 会话。</span>
             </div>
-          ) : null}
-          <p className="muted">设置从今天的消息开始生效，之前的摘要不会改变。</p>
+          ) : (
+            <div className="daily-digest-enable-note">
+              <strong>未开启 Telegram Bot</strong>
+              <span>总览将在网页端正常生成并保存，不推送到 Telegram（随时可在系统配置中开启 Bot）。</span>
+            </div>
+          )}
+          <p className="muted">设置从今天的消息开始生效，单群历史记录不受影响。</p>
         </div>
-      </Modal>
-
-      <Modal
-        actions={(
-          <div className="daily-digest-modal-actions">
-            <Button onClick={closeEnableDialog} type="button" variant="secondary">
-              取消
-            </Button>
-            <Button onClick={openBotSettings} type="button">
-              前往 Bot 设置
-            </Button>
-          </div>
-        )}
-        description="每日总览需要 Telegram Bot 才能发送。"
-        onClose={closeEnableDialog}
-        open={enableDialog === "configure"}
-        title="先完成 Bot 配置"
-      >
-        <p className="muted">请先配置 Bot Token 和目标 Chat ID，完成后再回来启用每日总览。</p>
       </Modal>
 
       <DailyDigestDrawer

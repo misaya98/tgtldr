@@ -1,5 +1,7 @@
 "use client";
 
+import { usePathname, useSearchParams } from "next/navigation";
+
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import {
@@ -44,20 +46,32 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 	const [botSummaryDeliveryMode, setBotSummaryDeliveryMode] = useState<BotSummaryDeliveryMode>("per_chat");
 	const [summaryRetryLimit, setSummaryRetryLimit] = useState(4);
 	const [defaultTimezone, setDefaultTimezone] = useState("Asia/Shanghai");
-	const [selectedSummaryId, setSelectedSummaryId] = useState<number | null>(null);
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+	const urlQ = searchParams.get("q") || "";
+	const urlChatId = searchParams.get("chatId") || initialChatId;
+	const urlTopicId = searchParams.get("topicId") || "all";
+	const urlStatus = (searchParams.get("status") as SummaryFilter) || "all";
+	const urlDelivery = (searchParams.get("delivery") as DeliveryFilter) || "all";
+	const urlDateFrom = searchParams.get("dateFrom") || "";
+	const urlDateTo = searchParams.get("dateTo") || "";
+	const urlPage = Number(searchParams.get("page")) || 1;
+	const urlSummaryId = searchParams.get("summaryId") ? Number(searchParams.get("summaryId")) : null;
+
+	const [selectedSummaryId, setSelectedSummaryId] = useState<number | null>(urlSummaryId);
 	const [externalSummary, setExternalSummary] = useState<Summary | null>(null);
-	const [detailOpen, setDetailOpen] = useState(false);
+	const [detailOpen, setDetailOpen] = useState(Boolean(urlSummaryId));
 	const [selectedChatId, setSelectedChatId] = useState("");
 	const [selectedTopicId, setSelectedTopicId] = useState("0");
 	const [manualDate, setManualDate] = useState(localDateInputValue());
-	const [filter, setFilter] = useState<SummaryFilter>("all");
-	const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>("all");
-	const [query, setQuery] = useState("");
-	const [chatFilter, setChatFilter] = useState(initialChatId);
-	const [topicFilter, setTopicFilter] = useState("all");
-	const [dateFrom, setDateFrom] = useState("");
-	const [dateTo, setDateTo] = useState("");
-	const [page, setPage] = useState(1);
+	const [filter, setFilter] = useState<SummaryFilter>(urlStatus);
+	const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>(urlDelivery);
+	const [query, setQuery] = useState(urlQ);
+	const [chatFilter, setChatFilter] = useState(urlChatId);
+	const [topicFilter, setTopicFilter] = useState(urlTopicId);
+	const [dateFrom, setDateFrom] = useState(urlDateFrom);
+	const [dateTo, setDateTo] = useState(urlDateTo);
+	const [page, setPage] = useState(urlPage);
 	const [pageSize] = useState(summaryPageSize);
 	const [total, setTotal] = useState(0);
 	const [manualEditorOpen, setManualEditorOpen] = useState(false);
@@ -94,6 +108,21 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 	useEffect(() => {
 		setPage(1);
 	}, [deferredQuery, chatFilter, topicFilter, filter, deliveryFilter, dateFrom, dateTo]);
+
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		if (deferredQuery) params.set("q", deferredQuery); else params.delete("q");
+		if (chatFilter !== "all") params.set("chatId", chatFilter); else params.delete("chatId");
+		if (topicFilter !== "all") params.set("topicId", topicFilter); else params.delete("topicId");
+		if (filter !== "all") params.set("status", filter); else params.delete("status");
+		if (deliveryFilter !== "all") params.set("delivery", deliveryFilter); else params.delete("delivery");
+		if (dateFrom) params.set("dateFrom", dateFrom); else params.delete("dateFrom");
+		if (dateTo) params.set("dateTo", dateTo); else params.delete("dateTo");
+		if (page > 1) params.set("page", String(page)); else params.delete("page");
+		if (selectedSummaryId && detailOpen) params.set("summaryId", String(selectedSummaryId)); else params.delete("summaryId");
+		const qs = params.toString();
+		window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+	}, [chatFilter, topicFilter, dateFrom, dateTo, deferredQuery, deliveryFilter, detailOpen, filter, page, pathname, selectedSummaryId]);
 
 	useEffect(() => {
 		if (summaries.length === 0 && !externalSummary) {
@@ -259,8 +288,8 @@ export function SummariesPanel({ initialChatId = "all" }: { initialChatId?: stri
 
 	return (
 		<DashboardPage
-			description="在这里搜索历史摘要、筛选状态，并在需要时手动补跑。"
-			title="摘要"
+			description="聚合每日总览、阶段回顾与单群摘要，支持关键词溯源与一键查验原始会话证据。"
+			title="今日简报"
 		>
 			<div className="summary-rollup-grid">
 				<DailyDigestExperience

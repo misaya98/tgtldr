@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TGTLDR · 每日早报信息流 (Editorial Briefing)</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --brand: #2563eb;
+      --brand-soft: #eff6ff;
+      --accent: #f59e0b;
+      --accent-soft: #fef3c7;
+      --danger: #ef4444;
+      --danger-soft: #fee2e2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", sans-serif;
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* Minimal Floating Left Dock */
+    .dock {
+      width: 80px;
+      background: #ffffff;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+    .dock-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #0f172a;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.1rem;
+      margin-bottom: 32px;
+    }
+    .dock-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+    }
+    .dock-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 0.7rem;
+      gap: 3px;
+      transition: all 120ms;
+    }
+    .dock-btn:hover { background: var(--bg); color: var(--text-main); }
+    .dock-btn.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+    .dock-btn .icon { font-size: 1.3rem; }
+
+    /* Center Stream */
+    .stream-container {
+      flex: 1;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 40px 32px 80px 32px;
+    }
+
+    /* Date Bar & Hero */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .date-badge {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .header-controls {
+      display: flex;
+      gap: 8px;
+    }
+    .ctrl-btn {
+      padding: 6px 14px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .ctrl-btn-primary { background: #0f172a; color: #fff; border-color: #0f172a; }
+
+    .hero-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #fff;
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 32px;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);
+    }
+    .hero-tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #38bdf8;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .hero-banner h1 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+    .hero-stats {
+      display: flex;
+      gap: 20px;
+      font-size: 0.86rem;
+      color: #94a3b8;
+    }
+    .hero-stats strong { color: #f8fafc; }
+
+    /* Category Section */
+    .category-section {
+      margin-bottom: 36px;
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+    }
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-pill {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: #e2e8f0;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* Modern Card */
+    .brief-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+      transition: all 180ms ease;
+    }
+    .brief-card:hover {
+      box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+      transform: translateY(-2px);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .card-source-tag {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--brand);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .card-headline {
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.4;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+
+    .card-tldr {
+      font-size: 0.94rem;
+      line-height: 1.65;
+      color: #334155;
+      margin-bottom: 16px;
+      background: #f8fafc;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border-left: 3px solid var(--brand);
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      padding-top: 12px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .card-tags {
+      display: flex;
+      gap: 6px;
+    }
+    .tag-item {
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+    }
+
+    .evidence-btn {
+      color: var(--accent);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <!-- Slim Iconic Dock -->
+  <aside class="dock">
+    <div class="dock-logo">TL</div>
+    <nav class="dock-nav">
+      <a class="dock-btn active" href="#"><span class="icon">📰</span>早报</a>
+      <a class="dock-btn" href="#"><span class="icon">💬</span>会话</a>
+      <a class="dock-btn" href="#"><span class="icon">⚡</span>回顾</a>
+      <a class="dock-btn" href="#"><span class="icon">⚙️</span>设置</a>
+    </nav>
+  </aside>
+
+  <!-- Editorial Stream -->
+  <main class="stream-container">
+    <div class="header-bar">
+      <span class="date-badge">2026年11月03日 · 星期二</span>
+      <div class="header-controls">
+        <button class="ctrl-btn">📅 选择往期</button>
+        <button class="ctrl-btn">🔍 全文检索</button>
+        <button class="ctrl-btn ctrl-btn-primary">📋 复制整份早报</button>
+      </div>
+    </div>
+
+    <!-- Executive Hero -->
+    <section class="hero-banner">
+      <div class="hero-tag">⚡ DAILY EXECUTIVE DIGEST</div>
+      <h1>今日群聊要点总览：3 项重大突破与 1 项事故复盘</h1>
+      <div class="hero-stats">
+        <span>已监听：<strong>14 个群组</strong></span>
+        <span>过滤冗余消息：<strong>5,120 条</strong></span>
+        <span>预计为你节省阅读：<strong>约 55 分钟</strong></span>
+      </div>
+    </section>
+
+    <!-- Section 1 -->
+    <section class="category-section">
+      <div class="section-head">
+        <h2 class="section-title"><span>🔥</span> 重点关注与生产事故避坑</h2>
+        <span class="section-pill">2 项要闻</span>
+      </div>
+
+      <article class="brief-card">
+        <div class="card-top">
+          <span class="card-source-tag">🦀 Rust 中文技术社区</span>
+          <span class="card-time">1,248 条消息提炼</span>
+        </div>
+        <h3 class="card-headline">Tokio 异步无界 Channel 导致线上网关内存暴涨事故深度复盘</h3>
+        <div class="card-tldr">
+          <strong>核心结论：</strong>网关连续运行 72 小时后发生 OOM，内存飙升至 2.4GB。群友挂 <code>tokio-console</code> 排查发现打点模块误用 <code>unbounded_channel()</code> 且缺乏背压保护，积压超 40 万 Task。已全面替换为固定容量 <code>channel(2048)</code>，内存回落至 130MB。
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag-item">#高危排查</span>
+            <span class="tag-item">#Tokio</span>
+            <span class="tag-item">#性能优化</span>
+          </div>
+          <div class="evidence-btn">🔍 点击查验 Telegram 原始对话 (16条原声) →</div>
+        </div>
+      </article>
+
+      <article class="brief-card">
+        <div class="card-top">
+          <span class="card-source-tag">🤖 AI 原生应用研讨群</span>
+          <span class="card-time">3,892 条消息提炼</span>
+        </div>
+        <h3 class="card-headline">DeepSeek 新多模态架构推理成本降低 65%，Cursor 配合编写单测实测极佳</h3>
+        <div class="card-tldr">
+          <strong>核心结论：</strong>新模型长上下文评测追平第一梯队，API 调用成本较 Claude 3.5 下降 65%。群内数十位开发者分享了在 Cursor 和 Claude Code 中自动生成端到端测试用例的提示词工程模板。
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag-item">#重大突破</span>
+            <span class="tag-item">#DeepSeek</span>
+            <span class="tag-item">#Cursor</span>
+          </div>
+          <div class="evidence-btn">🔍 点击查验 Telegram 原始对话 (28条原声) →</div>
+        </div>
+      </article>
+    </section>
+
+    <!-- Section 2 -->
+    <section class="category-section">
+      <div class="section-head">
+        <h2 class="section-title"><span>📦</span> 版本演进与架构讨论</h2>
+        <span class="section-pill">2 项要闻</span>
+      </div>
+
+      <article class="brief-card">
+        <div class="card-top">
+          <span class="card-source-tag">🌐 Web3 全球研习 · #技术架构</span>
+          <span class="card-time">940 条消息提炼</span>
+        </div>
+        <h3 class="card-headline">Layer2 验证者节点同步延迟解决方案与 ZK 验证基准评测</h3>
+        <div class="card-tldr">
+          <strong>核心结论：</strong>针对高负载下状态同步延迟的问题，提出基于 P2P 分片传播的改进机制；同时对比了三大主流 DA 层的验证开销。
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag-item">#架构设计</span>
+            <span class="tag-item">#Layer2</span>
+          </div>
+          <div class="evidence-btn">🔍 点击查验 Telegram 原始对话 →</div>
+        </div>
+      </article>
+    </section>
+
+  </main>
+</body>
+</html>

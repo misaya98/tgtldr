@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatMessageActivity } from "@/lib/types";
+import { ChatMessageActivity, ChatTopic } from "@/lib/types";
 import { ChatActivityStrip } from "@/components/chat-activity-strip";
 import { ChatDatePicker } from "@/components/chat-date-picker";
 
@@ -15,11 +15,50 @@ type ChatHistoryToolbarProps = {
   hasMessageFilters: boolean;
   onDateChange: (date: string) => void;
   onFiltersChange: (enabled: boolean) => void;
+  topics?: ChatTopic[];
+  selectedTopicId?: number;
+  onTopicChange?: (topicId: number) => void;
 };
 
 export function ChatHistoryToolbar(props: ChatHistoryToolbarProps) {
+  const hasTopics = Boolean(props.topics && props.topics.length > 0);
+
   return (
     <div className="chat-history-toolbar">
+      {hasTopics && (
+        <div className="chat-topic-bar" role="tablist" aria-label="话题筛选">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!props.selectedTopicId || props.selectedTopicId === 0}
+            className={`chat-topic-pill${!props.selectedTopicId || props.selectedTopicId === 0 ? " active" : ""}`}
+            onClick={() => props.onTopicChange?.(0)}
+            disabled={props.busy}
+          >
+            全部话题
+          </button>
+          {props.topics?.map((t) => {
+            const isSelected = props.selectedTopicId === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                className={`chat-topic-pill${isSelected ? " active" : ""}${t.isClosed ? " closed" : ""}`}
+                onClick={() => props.onTopicChange?.(t.id)}
+                disabled={props.busy}
+                title={t.title}
+              >
+                <span className="topic-hash">#</span>
+                <span className="topic-pill-title">{t.title || `话题 ${t.telegramTopicId}`}</span>
+                {t.isClosed && <span className="topic-pill-closed">已关闭</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="chat-history-date-row">
         <div className="chat-date-pager">
           <button

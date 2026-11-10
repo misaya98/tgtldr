@@ -436,3 +436,20 @@ export type FailureNotice = {
   deliveredAt: string | null;
   error: string;
 };
+
+export type BackgroundTask = {
+  id: string;
+  kind: "backfill" | "summary" | "catchup" | "digest";
+  title: string;
+  progress?: { current: number; total: number };
+  status: "pending" | "running" | "succeeded" | "failed";
+  errorMessage?: string;
+  startedAt: string;
+};
+
+export type EvidenceLinkParams = {
+  chatId: number;
+  date: string;
+  topicId?: number;
+  messageId?: number;
+};

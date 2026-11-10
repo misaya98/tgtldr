@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SummariesPanel } from "@/components/summaries-panel";
 
 export default async function SummariesPage({
@@ -9,5 +10,9 @@ export default async function SummariesPage({
   const chatId = Array.isArray(params.chatId) ? params.chatId[0] : params.chatId;
   const initialChatId = chatId && /^-?\d+$/.test(chatId) ? chatId : "all";
 
-  return <SummariesPanel initialChatId={initialChatId} />;
+  return (
+    <Suspense fallback={null}>
+      <SummariesPanel initialChatId={initialChatId} />
+    </Suspense>
+  );
 }

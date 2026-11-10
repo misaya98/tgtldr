@@ -71,12 +71,46 @@ func (s *Service) List(ctx context.Context, page, pageSize int) (model.DailyDige
 	return s.store.DailyDigests.List(ctx, page, pageSize)
 }
 
+// Run 按指定日期手动或自动触发一次每日总览生成，如果已有则执行 Rerun。
+func (s *Service) Run(ctx context.Context, summaryDate string) error {
+	settings, err := s.store.Settings.Get(ctx)
+	if err != nil {
+		return err
+	}
+	if existing, err := s.store.DailyDigests.GetByDate(ctx, summaryDate); err == nil {
+		return s.Rerun(ctx, existing.ID)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+
+	chats, err := s.store.Chats.ListSummaryEnabled(ctx)
+	if err != nil {
+		return err
+	}
+	selectedChats := participantChats(chats)
+	if len(selectedChats) == 0 {
+		if settings.Language == model.LanguageEN {
+			return fmt.Errorf("No chats are participating in Daily Digest")
+		}
+		return fmt.Errorf("没有参与每日总览的群组")
+	}
+	sources, ready, err := s.collectSources(ctx, settings, summaryDate, participantsFromChats(selectedChats))
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return ErrSourcesNotReady
+	}
+	item, _, err := s.store.DailyDigests.Create(ctx, summaryDate, sources)
+	if err != nil {
+		return err
+	}
+	return s.startGeneration(ctx, item.ID, false, true)
+}
+
 // RunIfReady 在参与群组全部到达终态后创建或继续当天的每日总览。
 func (s *Service) RunIfReady(ctx context.Context, settings model.AppSettings, chats []model.Chat, summaryDate string) error {
 	if model.ResolveBotSummaryDeliveryMode(settings, summaryDate) != model.BotSummaryDeliveryModeDailyDigest {
-		return nil
-	}
-	if !botReady(settings) {
 		return nil
 	}
 	if item, err := s.store.DailyDigests.GetByDate(ctx, summaryDate); err == nil {
@@ -123,9 +157,6 @@ func (s *Service) Rerun(ctx context.Context, id int64) error {
 	settings, err := s.store.Settings.Get(ctx)
 	if err != nil {
 		return err
-	}
-	if !botReady(settings) {
-		return ErrBotUnavailable
 	}
 	chats, err := s.store.Chats.ListSummaryEnabled(ctx)
 	if err != nil {
@@ -184,6 +215,10 @@ func (s *Service) ContinueExisting(ctx context.Context, settings model.AppSettin
 		return s.startGeneration(ctx, item.ID, true, !item.DeliverySuppressed)
 	case model.SummaryStatusSucceeded:
 		if !shouldAutomaticallyDeliver(item) {
+			return nil
+		}
+		// 未配置 Bot 时总览仅在网页端保存，不视为失败。
+		if !botReady(settings) {
 			return nil
 		}
 		return s.deliverAndRecord(ctx, settings, item)
@@ -263,7 +298,9 @@ func (s *Service) execute(ctx context.Context, id int64, deliver bool) error {
 		return nil
 	}
 	deliverySettings.Language = settings.Language
-	_ = s.deliverAndRecord(ctx, deliverySettings, result)
+	if botReady(deliverySettings) {
+		_ = s.deliverAndRecord(ctx, deliverySettings, result)
+	}
 	return nil
 }
 
@@ -305,13 +342,31 @@ func (s *Service) collectSources(
 	for _, selected := range participants {
 		item, err := s.store.Summaries.GetByChatAndDate(ctx, selected.chatID, summaryDate)
 		if errors.Is(err, pgx.ErrNoRows) {
-			waiting = append(waiting, selected.chatTitle)
-			continue
-		}
-		if err != nil {
+			// 论坛群按话题分别生成摘要，没有群级（topic_id=0）摘要；
+			// 此时把当天所有话题摘要合并成一个群级来源参与总览。
+			items, listErr := s.store.Summaries.ListByChatAndDateAllTopics(ctx, selected.chatID, summaryDate)
+			if listErr != nil {
+				return nil, false, listErr
+			}
+			if len(items) == 0 {
+				waiting = append(waiting, selected.chatTitle)
+				continue
+			}
+			ready := true
+			for _, topicItem := range items {
+				if !summaryTerminal(topicItem, settings, summaryDate) {
+					ready = false
+					break
+				}
+			}
+			if !ready {
+				waiting = append(waiting, selected.chatTitle)
+				continue
+			}
+			item = mergeTopicSummaries(items)
+		} else if err != nil {
 			return nil, false, err
-		}
-		if !summaryTerminal(item, settings, summaryDate) {
+		} else if !summaryTerminal(item, settings, summaryDate) {
 			waiting = append(waiting, selected.chatTitle)
 			continue
 		}
@@ -324,6 +379,45 @@ func (s *Service) collectSources(
 		return nil, false, fmt.Errorf("以下群组的摘要尚未生成或仍在处理中：%s: %w", strings.Join(waiting, "、"), ErrSourcesNotReady)
 	}
 	return sources, true, nil
+}
+
+// mergeTopicSummaries 将论坛群当天的多个话题摘要合并为一个群级摘要，
+// 保留首个摘要 ID 作为来源引用，消息数与章节按话题顺序累加。
+func mergeTopicSummaries(items []model.Summary) model.Summary {
+	merged := items[0]
+	merged.TopicID = 0
+	merged.TopicTitle = ""
+	merged.SourceMessageCount = 0
+	merged.ChunkCount = 0
+	merged.Content = ""
+	merged.Status = model.SummaryStatusSucceeded
+
+	parts := make([]string, 0, len(items))
+	allFailed := true
+	for _, item := range items {
+		merged.SourceMessageCount += item.SourceMessageCount
+		merged.ChunkCount += item.ChunkCount
+		if item.Status != model.SummaryStatusFailed {
+			allFailed = false
+		}
+		if item.GeneratedAt.After(merged.GeneratedAt) {
+			merged.GeneratedAt = item.GeneratedAt
+		}
+		content := strings.TrimSpace(item.Content)
+		if content == "" {
+			continue
+		}
+		title := strings.TrimSpace(item.TopicTitle)
+		if title == "" {
+			title = fmt.Sprintf("话题 %d", item.TopicID)
+		}
+		parts = append(parts, fmt.Sprintf("### %s\n\n%s", title, content))
+	}
+	if allFailed {
+		merged.Status = model.SummaryStatusFailed
+	}
+	merged.Content = strings.Join(parts, "\n\n")
+	return merged
 }
 
 // dailyDigestSource 将成功摘要、空群和最终失败群组分为三类来源。
@@ -359,11 +453,12 @@ func summaryTerminal(item model.Summary, settings model.AppSettings, summaryDate
 	}
 }
 
-// participantChats 将群级 Bot 选项解释为每日总览的参与范围。
+// participantChats 返回所有开启 AI 总结的群组；每日总览不再依赖 Bot 投递设置，
+// 单群“推送模式”只在全局切换为按群发送时影响投递。
 func participantChats(chats []model.Chat) []model.Chat {
 	result := make([]model.Chat, 0)
 	for _, chat := range chats {
-		if chat.SummaryEnabled && chat.DeliveryMode == model.DeliveryModeBot {
+		if chat.SummaryEnabled {
 			result = append(result, chat)
 		}
 	}

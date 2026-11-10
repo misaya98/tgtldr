@@ -107,6 +107,7 @@ func (r *Router) routes() *http.ServeMux {
 	mux.HandleFunc("/api/catch-ups", r.handleCatchUps)
 	mux.HandleFunc("/api/catch-ups/", r.handleCatchUpByID)
 	mux.HandleFunc("/api/daily-digests", r.handleDailyDigests)
+	mux.HandleFunc("/api/daily-digests/run", r.handleRunDailyDigest)
 	mux.HandleFunc("/api/daily-digests/", r.handleDailyDigestByID)
 
 	return mux

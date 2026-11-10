@@ -11,7 +11,7 @@ import {
 } from "react";
 import { api } from "@/lib/api";
 import { APIError } from "@/lib/api";
-import { ChatMessage, ChatMessageListResponse } from "@/lib/types";
+import { ChatMessage, ChatMessageListResponse, ChatTopic } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { ChatMessageItem } from "@/components/chat-message-item";
 import { ChatMessageSearch } from "@/components/chat-message-search";
@@ -32,6 +32,7 @@ export function ChatMessagesPanel({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectedDate = searchParams.get("date") || "";
+  const topicId = positiveSearchParam(searchParams.get("topicId"), 0);
   const query = searchParams.get("q") || "";
   const searchPage = positiveSearchParam(searchParams.get("searchPage"), 1);
   const focusedMessageId = positiveSearchParam(searchParams.get("messageId"), 0);
@@ -39,6 +40,7 @@ export function ChatMessagesPanel({
   const summaryDate = searchParams.get("summaryDate") || "";
   const { language } = useI18n();
   const [metadata, setMetadata] = useState<ChatMessageListResponse | null>(null);
+  const [chatTopics, setChatTopics] = useState<ChatTopic[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -51,6 +53,15 @@ export function ChatMessagesPanel({
   const scrollToFocusRef = useRef(0);
   const earlierAbortRef = useRef<AbortController | null>(null);
   const resolvedDateRef = useRef("");
+
+  useEffect(() => {
+    void api.listChats({ includeTopics: true }).then((chats) => {
+      const target = chats.find((c) => c.id === chatId);
+      if (target?.topics && target.topics.length > 0) {
+        setChatTopics(target.topics);
+      }
+    }).catch(() => null);
+  }, [chatId]);
 
   useEffect(() => {
     if (
@@ -77,6 +88,7 @@ export function ChatMessagesPanel({
       limit: initialMessageLimit,
       focusMessageId: focusedMessageId || undefined,
       filters: filtersApplied,
+      topicId: topicId || undefined,
       signal: controller.signal,
     }).then((response) => {
       metadataRef.current = response;
@@ -100,7 +112,7 @@ export function ChatMessagesPanel({
     });
 
     return () => controller.abort();
-  }, [chatId, filtersApplied, focusedMessageId, pathname, query, selectedDate]);
+  }, [chatId, filtersApplied, focusedMessageId, pathname, query, selectedDate, topicId]);
 
   useEffect(() => {
     if (query) setSearchOpen(true);
@@ -141,6 +153,7 @@ export function ChatMessagesPanel({
         limit: earlierMessageLimit,
         before: metadata.beforeCursor,
         filters: filtersApplied,
+        topicId: topicId || undefined,
         signal: controller.signal,
       });
       setMetadata(response);
@@ -151,6 +164,20 @@ export function ChatMessagesPanel({
     } finally {
       if (!controller.signal.aborted) setLoadingEarlier(false);
     }
+  }
+
+  function handleTopicChange(newTopicId: number) {
+    const params = currentSearchParams();
+    params.delete("messageId");
+    params.delete("q");
+    params.delete("searchPage");
+    params.delete("summaryDate");
+    if (newTopicId > 0) {
+      params.set("topicId", String(newTopicId));
+    } else {
+      params.delete("topicId");
+    }
+    pushSearchParams(pathname, params);
   }
 
   function navigateToDate(date: string) {
@@ -286,6 +313,9 @@ export function ChatMessagesPanel({
             onFiltersChange={changeFilters}
             previousDate={metadata.previousDate}
             total={metadata.date === (selectedDate || metadata.date) ? metadata.total : undefined}
+            topics={chatTopics}
+            selectedTopicId={topicId}
+            onTopicChange={handleTopicChange}
           />
         ) : null}
 
@@ -363,6 +393,7 @@ export function ChatMessagesPanel({
         chatId={chatId}
         chatTitle={title}
         date={summaryDate}
+        topicId={topicId}
         onClose={closeDaySummary}
         open={Boolean(summaryDate)}
       />

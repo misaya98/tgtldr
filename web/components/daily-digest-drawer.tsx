@@ -263,7 +263,7 @@ function DailyDigestDetail({
         <div className="summary-status-actions">
           <StatusPill tone={statusTone(item.status)}>{statusText(item.status)}</StatusPill>
           <StatusPill tone={delivery.tone} title={delivery.detail}>{delivery.label}</StatusPill>
-          {!processing ? <button className="text-link-button" disabled={!botReady} onClick={onRerun} type="button">重新生成并发送</button> : null}
+          {!processing ? <button className="text-link-button" onClick={onRerun} type="button">{botReady ? "重新生成并发送" : "重新生成"}</button> : null}
           {botReady && item.status === "succeeded" && item.deliveryError && !item.deliveredAt && !item.deliverySkippedReason ? (
             <button className="text-link-button" onClick={onRetryDelivery} type="button">重试发送</button>
           ) : null}
@@ -338,7 +338,7 @@ function dailyDigestDeliveryState(item: DailyDigest, botReady: boolean): { label
   if (item.deliveryError) return { label: "发送失败", tone: "bad", detail: item.deliveryError };
   if (item.status !== "succeeded") return { label: "未发送", tone: "neutral" };
   if (item.deliverySuppressed) return { label: "等待手动发送", tone: "warn", detail: "重新生成完成后不会自动重复发送。" };
-  if (!botReady) return { label: "等待 Bot 配置", tone: "warn", detail: "Bot 配置尚未完成，当前无法发送。" };
+  if (!botReady) return { label: "仅网页查看", tone: "neutral", detail: "未开启 Telegram Bot 推送，仅在网页端查看。" };
   return { label: "待发送", tone: "warn" };
 }
 

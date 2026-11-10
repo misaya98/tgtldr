@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { ChatsPanel } from "@/components/chats-panel";
 
 export default function ChatsPage() {
-  return <ChatsPanel />;
+  return (
+    <Suspense fallback={null}>
+      <ChatsPanel />
+    </Suspense>
+  );
 }

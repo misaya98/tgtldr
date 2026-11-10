@@ -345,7 +345,7 @@ export function SettingsPanel() {
       }
       if (result.candidates.length === 1) {
         const [candidate] = result.candidates;
-        await saveResolvedBotTargetChat(candidate.chatId);
+        fillBotTargetChat(candidate.chatId);
         return;
       }
       toast.showSuccess("找到了多个可能的会话，请选择一个。");
@@ -357,49 +357,14 @@ export function SettingsPanel() {
   }
 
   async function selectBotTargetChat(candidate: BotTargetChatCandidate) {
-    await saveResolvedBotTargetChat(candidate.chatId);
+    fillBotTargetChat(candidate.chatId);
   }
 
-  async function saveResolvedBotTargetChat(chatId: string) {
-    if (!settings) {
-      return false;
-    }
-
-    setSavingBotTargetChat(true);
-    try {
-      const persistedSettings = await api.settings();
-      const nextSettings = {
-        ...persistedSettings,
-        botEnabled: settings.botEnabled,
-        botTargetChatId: chatId,
-        botToken: settings.botToken?.trim() || persistedSettings.botToken || "",
-      };
-      const saved = await api.saveSettings(nextSettings);
-      setSettings((current) => {
-        if (!current) {
-          return current;
-        }
-        return {
-          ...current,
-          botEnabled: saved.botEnabled,
-          botTargetChatId: saved.botTargetChatId,
-          botToken: "",
-        };
-      });
-      setSecretPlaceholders((current) => ({
-        ...current,
-        botToken: saved.botToken || current.botToken,
-      }));
-      setBotTargetChatCandidates([]);
-      notifyBootstrapRefresh();
-      toast.showSuccess("已自动绑定并保存 Chat ID。");
-      return true;
-    } catch (err) {
-      toast.showError(asMessage(err));
-      return false;
-    } finally {
-      setSavingBotTargetChat(false);
-    }
+  function fillBotTargetChat(chatId: string) {
+    if (!settings) return;
+    setSettings((current) => current ? { ...current, botTargetChatId: chatId } : current);
+    setBotTargetChatCandidates([]);
+    toast.showSuccess(`已填入目标 Chat ID: ${chatId}，请点击底栏「保存修改」以生效。`);
   }
 
   async function resetAuthEditor() {
